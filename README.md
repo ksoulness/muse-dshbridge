@@ -73,12 +73,18 @@
 
 ```
 README.md                  本文件：总览与快速开始
+docs/FOR-NEW-MUSE.md       ★ 给新 Muse 的总入口：阅读顺序、前置清单、铁律、验收标准
 docs/DSH-CONTROL.md        DSH 线完整方法：通道、定式、流程、坑
 docs/WECHAT-BRIDGE.md      微信线完整方法：协议、部署、hook、坑
+docs/WECHAT-SETUP-PROMPT.md
+                           给新 Muse 的微信接入逐步执行指令（照着做）
 docs/TROUBLESHOOTING.md    两条线的故障速查表
 skills/dsh-relay-operation/SKILL.md
                            交给 Muse 的 DSH 操作技能手册（定式版）
+tools/dsh_client.py        DSH 客户端：token 自续 + 台账 + 长超时重试
 ```
+
+**让一个新的 Muse 学会这两件事**：把本仓库地址给它，并让它先读 `docs/FOR-NEW-MUSE.md`。仓库教方法，但权限不在仓库里——DSH 的 OAuth token 对要所有者在 Windows 侧签发后交付，微信要所有者装插件并扫码一次，这两步天然只能由人完成。
 
 ## 相关项目
 
