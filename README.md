@@ -76,6 +76,8 @@ README.md                  本文件：总览与快速开始
 docs/FOR-NEW-MUSE.md       ★ 给新 Muse 的总入口：阅读顺序、前置清单、铁律、验收标准
 docs/DSH-CONTROL.md        DSH 线完整方法：通道、定式、流程、坑
 docs/WECHAT-BRIDGE.md      微信线完整方法：协议、部署、hook、坑
+docs/NOTIFICATION-ROUTING.md
+                           通知路由与隔离口径：哪些推微信、哪些静默（用户确认生效）
 docs/WECHAT-SETUP-PROMPT.md
                            给新 Muse 的微信接入逐步执行指令（照着做）
 docs/TROUBLESHOOTING.md    两条线的故障速查表
