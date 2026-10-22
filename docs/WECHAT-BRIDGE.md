@@ -42,13 +42,36 @@ Muse 官方通道只有 WhatsApp、没有微信。本文是把**用户本人微�
 
 会被平台替换的 VM，替换后 `/etc/systemd/system` 下的 unit 消失、服务全灭（登录态在 home，不受影响）。靠第 2 节第 6 步的 watchdog hook 自愈：检测 health 失败 → 重装 unit → 拉起服务。实测自愈过 VM 替换与服务短停。
 
-## 6. 使用规矩（实测约定）
+## 6. 坑三：stallwatch「没处理 / 已恢复」通知刷屏（已打补丁修复）
+
+症状：主人微信里反复收到成对消息——「【wx-bot】你的 Agent（muse）已经 10 分钟没有处理微信消息，目前有 N 条在排队…」，过一会儿又来「【wx-bot】Agent 已恢复处理微信消息。」桥其实没坏，一天能刷好几对。
+
+定性：
+
+- 这是 wx-bot 内置的 stallwatch（源码 `packages/cli/src/cmd/run.ts` 的 `stallWatch` + `packages/core/src/alerts.ts`）：每 30 秒查一次收件箱，某条事件处于 pending 且无人领取的时长超过 `AGENT_STALL_MS`，就给登录账号主人发「没处理」；队列清空后再发「已恢复」。
+- `AGENT_STALL_MS = 10 * 60_000` 是**源码硬编码常量**，v0.4.8（当前最新版）没有配置项、环境变量或开关能改，GitHub 上也没有现成修复。
+- Muse 这类回合串行的运行时里，长任务、上下文压缩、云 VM 替换都会让消息领取延迟超过 10 分钟，于是误报成对出现。所谓「回复慢」同理：慢的是 Agent 回合排队，桥本身的轮询是秒级。
+
+修复（2026-10-22 实测落地）：
+
+1. 改源码 `packages/core/src/alerts.ts`：`AGENT_STALL_MS` 改为 `60 * 60_000`（60 分钟，对齐下文「断线超 1 小时才通知」的使用规矩），在补丁处写明原因注释，`git diff` 保持可见。
+2. 按 install.sh 同款命令从源码构建：仓库根 `bun install --frozen-lockfile --production --filter @wx-bot/cli`，再在 `packages/cli` 下 `bun build src/main.ts --compile --minify --define WXBOT_VERSION="\"<版本>-stall60\"" --outfile <输出文件>`。
+3. `bun test` 全过（69 个）后，先备份原版二进制（如 `~/.local/bin/wx-bot.stock-v0.4.8`），再换上自建版，`systemctl restart wx-bot`，等 15 秒以 `health --grace 0` 退出码 0 验收。
+
+注意事项：
+
+- **不要运行 `wx-bot update`**：会覆盖回官方版，阈值变回 10 分钟。以后升级上游版本，先在新源码上重打这个补丁再构建。
+- 真故障不受影响：Agent 真死掉超过 1 小时，仍会通知主人一次。
+
+附带修复：官方 systemd 模板把 `StartLimitIntervalSec` / `StartLimitBurst` 写在 `[Service]` 段，systemd 会报 `Unknown key name` 并忽略；把两行移到 `[Unit]` 段即可（已安装的单元和 `adapters/muse/wx-bot.service` 模板都要改）。
+
+## 7. 使用规矩（实测约定）
 
 - 通道只是通道：审批、付款、敏感操作仍走 Muse 主界面的正式流程，微信里只做对话与转达
 - 初期只处理绑定用户的文字私聊；群聊、公众号等不在范围内
 - 短暂断线并自动恢复的，不必通知用户；断线超过 1 小时未恢复才报
 
-## 7. 验收（三条全过才算接通）
+## 8. 验收（三条全过才算接通）
 
 1. `wx-bot health --binding muse --grace 0` 退出码 0
 2. 用户微信给 ClawBot 发一条消息，Muse 能收到并回复
