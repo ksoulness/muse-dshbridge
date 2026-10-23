@@ -56,6 +56,19 @@
 2. 云电脑装 wx-bot 单文件二进制，写 pull 模式配置（binding 名 `muse`）
 3. 扫码绑定（云 IP 先借家庭出口过风控），装 systemd 服务 + 收件箱 hook + watchdog hook，health 退出码 0 验收
 
+## 三大部分
+
+两条链路的经验按主题收进三个专属文件夹，每部分独立成章：
+
+| 部分 | 文件夹 | 内容 |
+|---|---|---|
+| 一、微信链的优化 | [wechat-optimization/](wechat-optimization/) | 上下文连贯 + 对话隔离（ctx.py）、stallwatch 10 分钟误报刷屏的补丁修复、systemd 模板修复、hook 轮询与自愈、通知与回复规矩 |
+| 二、第一次连接微信出问题怎么办 | [wechat-first-connect/](wechat-first-connect/) | 前置清单、扫码绑定被腾讯风控拦（运行环境存在风险）的解法、health 非 0、登录过期 `expired / -14`、`no context_token`、消息重复唤醒、二维码旧码缓存、云 VM 替换丢服务、接通验收标准 |
+| 三、DSH 的连接 | [dsh-connection/](dsh-connection/) | 通道结构（8443 tailnet-only → 适配器 → Relay）、为什么不能直连 Relay、OAuth 建连三步、token 自续轮换纪律、客户端与派发流程、`FORBIDDEN / expired` 适配器层问题、安全边界 |
+
+`docs/` 下的原有方法文档（`DSH-CONTROL.md`、`WECHAT-BRIDGE.md`、`TROUBLESHOOTING.md`
+等）仍保留，被这三个文件夹引用，不重复写。
+
 ## 实测记录（2026-10-20）
 
 - DSH 线全链打通：`tools/list` 17 个工具、`doctor` ok、15 个工作区可见
@@ -73,7 +86,12 @@
 ## 目录
 
 ```
-README.md                  本文件：总览与快速开始
+README.md                  本文件：总览、快速开始、三大部分导览
+wechat-optimization/       ★ 一、微信链的优化：上下文连贯+隔离、stallwatch 补丁、systemd 修复、hook 自愈
+wechat-optimization/scripts/ctx.py
+                           按发送者隔离的对话上下文脚本（hook 唤醒前 read，处理完 in/out 记录）
+wechat-first-connect/      ★ 二、第一次连接微信出问题怎么办：绑定风控、登录过期、重复唤醒、验收标准
+dsh-connection/            ★ 三、DSH 的连接：8443 通道、OAuth 建连、token 自续、派发流程
 docs/FOR-NEW-MUSE.md       ★ 给新 Muse 的总入口：阅读顺序、前置清单、铁律、验收标准
 docs/DSH-CONTROL.md        DSH 线完整方法：通道、定式、流程、坑
 docs/WECHAT-BRIDGE.md      微信线完整方法：协议、部署、hook、坑
