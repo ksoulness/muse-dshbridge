@@ -39,7 +39,7 @@
 **三条铁律：**
 
 - 只处理绑定用户本人的白名单私聊；**回复微信只发纯文本、不用 Markdown**
-- 服务好坏只认 `wx-bot health --binding muse --grace 0` 的**退出码 0**，不看「进程在跑」
+- 服务好坏只认 `wx-bot health --binding muse --grace 0` 的**退出码 0**，不看「进程在跑」；且 health 0 不证明能发送（发送会话会单独过期，send 报 `ret=-2` 也可能是它），验收必须含一次真实 send 成功；**重新扫码前先停服务**，重扫后仍报 expired 先查状态目录的 `expired` 残留标记，不要让用户反复扫码（见 WECHAT-BRIDGE.md 坑五）
 - 在会被替换的云 VM 上必须装 watchdog hook（/etc 会被清空），否则 VM 一换微信就断；且 watchdog 里 **unit 文件缺失必须立即重装、不走失败计数**，systemd 模板的 StartLimit 两键必须在模板源文件的 `[Unit]` 段（细则见 WECHAT-BRIDGE.md 坑二、WECHAT-SETUP-PROMPT.md 第 8 步）
 - 运行环境整体停摆时，机内自愈与告警会一起失效（可无声十几小时）——这在机内无解，部署时要把机外死亡开关的选项摆给用户拍板，不要承诺机内监控能兜住（见 WECHAT-BRIDGE.md 坑四）
 

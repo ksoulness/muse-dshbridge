@@ -26,7 +26,9 @@
 | systemd 报 StartLimit 相关 `Unknown key name` / 重启速率限制不生效 | 模板把 `StartLimitIntervalSec` / `StartLimitBurst` 写在了 `[Service]` 段，被 systemd 忽略 | 两键移到 `[Unit]` 段，**必须改模板源文件**并按新模板重装；只改现行 unit 会被下一次自愈重装覆盖 |
 | 想把 wx-bot 单独搬到稳定 VPS 根除断线 | pull 投递靠 Muse 在本机执行 `inbox pull/send` 读写本机状态，桥搬走 pull 链路就断 | 迁移必须连投递一起设计：改 webhook、或 hook 经 Tailscale/SSH 远程执行 pull/send、或加转发层；切换先停旧再启新，防双实例抢 cursor；见 WECHAT-BRIDGE.md 坑四 |
 | `send` 报 `no context_token` | 对方还没先给 ClawBot 发过消息 | 等对方先发一条，再回复 |
-| `send` 报 `expired` / `-14` | 登录过期 | 重新扫码登录 + `systemctl restart wx-bot` |
+| `send` 报 `expired` / `-14` | 登录过期 | 重新扫码登录 + `systemctl restart wx-bot`；**重扫前先停服务**，防旧 poller 的过期标记盖住新会话（见下一行） |
+| `send` 报 `ret=-2 (HTTP 502)`，但 health 退出码 0、poll 正常 | 发送会话已过期（端点真实返回 `-14 session timeout`），收消息的长轮询不受影响——收正常不代表发正常 | 按登录过期处理：停服务 → 重新扫码 → 重启；不要当临时网关错误反复重试；见 WECHAT-BRIDGE.md 坑五 |
+| 重新扫码已 `login ok`、新 `session.json` 已写好，但 health 仍报 login expired、`status` 显示 `expired: true` | 旧会话 poller 在新会话写好后几秒内写下的 `expired` 标记残留；该字段只反映标记文件存在，不代表新会话无效 | 对照状态目录里 `session.json` 与 `expired` 的时间戳确认是残留 → 把 `expired` 移走改名备份 → `systemctl restart wx-bot` → health 复查；不要再让用户扫码 |
 | 二维码图发过去总是同一张旧码 | 聊天按文件路径缓存图片 | 每次新码用新路径发原图，不要改名/复制到固定文件名 |
 | 收件箱消息重复唤醒 | 处理完没 ack，租约（30 分钟）到期重投 | 逐条处理完逐条 `wx-bot inbox ack <event_id>`；同一 event_id 只处理一次 |
 | 微信反复收到「Agent 已 X 分钟没处理 / 已恢复处理」成对通知 | wx-bot 内置 stallwatch 阈值硬编码 10 分钟；Agent 回合串行时，长任务、上下文压缩、VM 替换都会让领取延迟超 10 分钟，属误报刷屏 | 按 WECHAT-BRIDGE.md「坑三」打补丁：阈值改 60 分钟并从源码自建二进制；切勿跑 `wx-bot update`（会覆盖回原版） |

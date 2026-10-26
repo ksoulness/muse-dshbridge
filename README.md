@@ -80,7 +80,7 @@
 - **relay 静态 token 永不离开 Windows 本机**；对外只有可吊销、短时效的 OAuth token
 - 8443 通道 **tailnet-only**，不经公网；公网桥见姊妹项目 [dsh-gptbridge](https://github.com/ksoulness/dsh-gptbridge)
 - 微信侧只处理绑定用户本人的白名单私聊；回复只发纯文本
-- 微信对话与其他会话互不串扰：独立 binding 与白名单收件箱、独立唤醒 worker 处理、回复只发回用户本人（详见 docs/WECHAT-BRIDGE.md 第 10 节）
+- 微信对话与其他会话互不串扰：独立 binding 与白名单收件箱、独立唤醒 worker 处理、回复只发回用户本人（详见 docs/WECHAT-BRIDGE.md 第 11 节）
 - 本仓库**不含任何真实凭据**：token、口令、wxid、tailnet 名均为占位符，部署时替换为你自己的
 
 ## 目录

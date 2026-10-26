@@ -18,7 +18,7 @@ Muse 官方通道只有 WhatsApp、没有微信。本文是把**用户本人微�
 
 1. **安装**：从 GitHub releases 下载对应架构单文件二进制到 `~/.local/bin/wx-bot`，用 checksums.txt 校验 sha256，`wx-bot version` 确认。
 2. **配置**：`~/.config/wx-bot/config.json`（目录 0700、文件 0600），照 `examples/config.pull.example.json`：binding 名 `muse`、`"delivery": "pull"`。若 shell 里有代理变量，必须写进 `~/.config/wx-bot/env`——**systemd 服务不继承 shell 环境**，不写就连不上。
-3. **扫码登录**：用 `setsid nohup` 让登录进程脱离当前命令（`wx-bot login muse --qr-png ... --timeout 10m`）。每张二维码约 2 分钟有效：日志一出现新的 `QR PNG: <路径>`，立刻把原图发给用户扫，中间不做别的事；**不要改名/复制二维码文件**（聊天按路径缓存图片，同路径会一直显示第一张过期码）。只有绑定用户本人的 wxid 进白名单。
+3. **扫码登录**：用 `setsid nohup` 让登录进程脱离当前命令（`wx-bot login muse --qr-png ... --timeout 10m`）。每张二维码约 2 分钟有效：日志一出现新的 `QR PNG: <路径>`，立刻把原图发给用户扫，中间不做别的事；**不要改名/复制二维码文件**（聊天按路径缓存图片，同路径会一直显示第一张过期码）。只有绑定用户本人的 wxid 进白名单。**重新扫码（登录过期后重登）前必须先 `systemctl stop wx-bot` 停服务**——不停服务直接重登，旧会话的 poller 可能在新会话写好后几秒内写下过期的 `expired` 标记、把新会话盖住，重登成功也会报 expired（见坑五）；扫码环节也要压紧来回耗时，一张码约 2 分钟，聊着聊着就过期了，实测连过两张码才在第三张扫上。
 4. **常驻服务**：取仓库 `adapters/muse/wx-bot.service` 模板（替换 `__HOME__` / `__USER__`），装到 `/etc/systemd/system/wx-bot.service`，`daemon-reload && enable --now`。**装之前先查模板**：`StartLimitIntervalSec` / `StartLimitBurst` 两键必须在 `[Unit]` 段——上游模板曾把它们写在 `[Service]` 段，systemd 会直接忽略；模板不对就**先改模板源文件**再安装，只改已装好的 unit 文件没用（下一次自愈重装就会被模板打回原样，见坑三附带修复）。验收看 `wx-bot health --binding muse --grace 0` **退出码 0**（不要只看服务 active）。改 env 或重扫后必须 `systemctl restart wx-bot`。
 5. **收件箱 hook**：按 `adapters/muse/wechat-hook.sh` 写检测脚本，**poll_interval_secs 设 5**（默认 60 太慢）。规则：`wx-bot inbox count --binding muse` > 0 就唤醒领消息；否则跑 health 存活检查，异常时唤醒报告（同一问题只报一次、之后每小时最多一次）。先 dry_run 再 enable。
 6. **watchdog hook**（会被替换的云 VM 必加）：60 秒轮询。**看守逻辑有硬性要求，照下面写，不要自由发挥**（原理与实测证据见坑二）：
@@ -34,7 +34,7 @@ Muse 官方通道只有 WhatsApp、没有微信。本文是把**用户本人微�
 - `kind=alert` 是 wx-bot 的异常通知、不是微信消息：转报主聊天，不回微信，照常 ack
 - 其余事件当作用户直接说的话：text 是文字、voice_text 是语音转写、media[].path 是本机文件可直接读
 - **回复微信只发纯文本，不用 Markdown**，链接直接写网址；发文字用 heredoc：`wx-bot send --binding muse --to <from_wxid> --text - <<'EOF' … EOF`；图片/文件用 `--image` / `--file`（实测可达）。长任务先回一句确认，做完再发结果
-- send 失败含义：`no context_token` = 对方还没先给 ClawBot 发过消息，等对方先发；`expired` / `-14` = 登录过期，重扫 + 重启服务。失败要报主聊天，不要反复重试
+- send 失败含义：`no context_token` = 对方还没先给 ClawBot 发过消息，等对方先发；`expired` / `-14` = 登录过期，重扫 + 重启服务；`ret=-2 (HTTP 502)` 也可能是发送会话过期被包了一层（health 全绿也会发生），同样按登录过期处理、不要当临时网关错误反复重试。重扫前先停服务、重扫后仍报 expired 先查残留标记，见坑五。失败要报主聊天
 
 ## 4. 坑一：绑定阶段的风控（云环境必遇）
 
@@ -92,21 +92,38 @@ Muse 官方通道只有 WhatsApp、没有微信。本文是把**用户本人微�
 - **死亡开关是用户的选择，不是默认必装**：有的用户宁可自己发现断线再回来找（实测有用户明确这么决定并暂缓此方案）。部署时把「机内修不了停摆、最长可能无声十几小时」讲清，让用户拍板；用户暂缓就记录在案、不再主动推进，设计留作备选。
 - **根除只有迁移**：把桥迁到不被更换的稳定主机（家里机器/NAS/稳定 VPS）。但有一个极易漏掉的前提——**pull 投递靠 Muse 在本机执行 `inbox pull / send` 读写本机状态目录，只把 wx-bot 二进制搬走，pull 链路会直接断**。迁移必须连投递一起设计：改 webhook（前提是运行时有 webhook 触发入口）、或 Muse 侧 hook 改为经 Tailscale/SSH 远程执行稳定主机上的 pull/send、或加转发层，三选一。切换时先停旧实例再启新实例，两边同时 poll 会互相顶掉 cursor；定制二进制要在目标机按原补丁重新构建；登录态迁移失效需重扫，预案要提前告诉用户，不要切换当天才说。
 
-## 8. 使用规矩（实测约定）
+## 8. 坑五：发送会话过期（health 全绿也发不出）与重登后的 expired 残留标记
+
+第一幕——**收正常 ≠ 发正常**（2026-10-26 实测）：`wx-bot send` 连续失败，报 `/ilink/bot/sendmessage: ret=-2 (HTTP 502)`；同期 health 退出码 0、`logged_in: true`、poll 一切正常，看起来桥完全没病。经代理直连发送端点探针，真实返回是 `errcode: -14, session timeout`——**发送会话已过期，收消息的长轮询却不受影响**。所以：
+
+- health 退出码 0 只证明轮询与登录态标记，**不证明发送通道可用**；验收与排障都要包含一次真实 `send` 成功，光看 health 会误判「桥是好的」。
+- send 报 `ret=-2` 不要按「502 是网关临时错误」放过去重试：它可能正是会话过期（-14）被包了一层。按登录过期处理：重新扫码（流程见下）。
+
+第二幕——**重登成功却仍报 expired**：停服这一步若漏了（或旧 poller 还在跑），新 `session.json` 写好仅几秒后，旧会话过期的 poller 会写下状态目录里的 `expired` 标记文件（内容是旧过期时间戳），把新会话盖住。之后服务只认这个标记：`expired: true`、poll 不运行、health 报 login expired——**但新会话本身是有效的，`status` 的 `expired` 字段只反映标记文件存在与否**。
+
+正确处理顺序（先查标记、再考虑重扫，别一上来又让用户扫码）：
+
+1. 对照时间戳：看状态目录（如 `~/.local/state/wx-bot/<binding>/`）里 `session.json` 与 `expired` 两个文件的写入时间；`expired` 紧跟在新 session 之后几秒内、且内容是旧时间戳，就是残留。
+2. 把 `expired` 移走备份（改名为带日期的 `.bak`，不要直接删，留证），`systemctl restart wx-bot`。
+3. 复查 health 退出码 0、`expired: false`、poll 恢复，再用一次真实收发 + 发图关闭问题（实测照此修复后当场全通）。
+
+防复发就一条：**任何重新扫码之前，先停服务**（第 2 节第 3 步已写死）；重登后仍报 expired，先按上面三步查残留标记，再决定是否需要用户再扫一次。
+
+## 9. 使用规矩（实测约定）
 
 - 通道只是通道：审批、付款、敏感操作仍走 Muse 主界面的正式流程，微信里只做对话与转达
 - 初期只处理绑定用户的文字私聊；群聊、公众号等不在范围内
 - 短暂断线并自动恢复的，不必通知用户；断线超过 1 小时未恢复才报（此规则只在运行环境活着、看守能跑时成立；环境整体停摆时连这条也发不出来，见坑四）
 - 通知去哪儿看 [docs/NOTIFICATION-ROUTING.md](NOTIFICATION-ROUTING.md)：用户点名要的（早晚报）微信直推不隔离，异常和需用户动手的按原通道通知，纯后台成功静默
 
-## 9. 验收（三条全过才算接通）
+## 10. 验收（三条全过才算接通）
 
 1. `wx-bot health --binding muse --grace 0` 退出码 0
 2. 用户微信给 ClawBot 发一条消息，Muse 能收到并回复
 3. `wx-bot send --image` 发图能送达
 4. （云 VM 环境加测）模拟删 unit：停服并删除 unit 文件，watchdog 应在下一轮约 1 分钟内按模板重装并恢复 health 退出码 0（坑二快速分支的验收，实测 38 秒）
 
-## 10. 会话隔离：用户的微信对话与其他会话互不串扰（2026-10-23 用户要求入库）
+## 11. 会话隔离：用户的微信对话与其他会话互不串扰（2026-10-23 用户要求入库）
 
 用户的要求是：他在微信里与 Muse 的对话，必须与其他所有会话相互隔离、互不串扰。实现机制四条（仓库只记机制，不记真实 wxid 等凭据）：
 

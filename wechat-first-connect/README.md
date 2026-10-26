@@ -40,7 +40,8 @@
 ## 2. 服务 active 但 health 非 0
 
 **active ≠ 可用。** 验收只认 `wx-bot health --binding muse --grace 0` 的**退出码**，
-0 才算接通。服务起来了但 health 失败，常见原因：
+0 才算接通（且 health 0 只证明收消息一侧，发送侧还要靠验收里的一次真实
+send 成功才算数——发送会话会单独过期，见第 3 节）。服务起来了但 health 失败，常见原因：
 
 - `env` 里没写代理（见第 0 节）
 - 登录态失效（见第 3 节）
@@ -50,10 +51,22 @@
 
 ## 3. send 报 expired / -14（登录过期）
 
-含义是登录过期（二维码登录态丢了、账号被挤掉等）。处理：
-重新扫码登录（流程同第 1 节，但此时已绑定过，走直连通常没问题；
-如果还被风控拦，再借一次家庭出口），然后 `systemctl restart wx-bot`，
-等 15 秒 `health --grace 0` 退出码 0 验收。
+含义是登录过期（二维码登录态丢了、账号被挤掉等）。注意还有一种伪装形态：
+send 报 `ret=-2 (HTTP 502)`、但 health 退出码 0、poll 正常——实测端点真实
+返回是 `-14 session timeout`，即**发送会话过期、收消息不受影响**，
+不要当临时网关错误重试，按登录过期处理。
+
+处理（顺序别错）：
+**先 `systemctl stop wx-bot` 停服务**，再重新扫码登录（流程同第 1 节，
+但此时已绑定过，走直连通常没问题；如果还被风控拦，再借一次家庭出口），
+然后 `systemctl restart wx-bot`，等 15 秒 `health --grace 0` 退出码 0 验收。
+
+为什么必须先停服务：不停服务直接重登，旧会话的 poller 可能在新
+`session.json` 写好后几秒内写下状态目录里的 `expired` 标记文件，把新会话
+盖住——表现是 login 明明 ok、health 却仍报 expired。真遇上时不要再让用户
+扫码：对照 `session.json` 与 `expired` 的时间戳确认是残留标记，把 `expired`
+移走改名备份，重启服务即可恢复（完整版见
+[docs/WECHAT-BRIDGE.md](../docs/WECHAT-BRIDGE.md) 坑五）。
 
 ## 4. send 报 no context_token
 
