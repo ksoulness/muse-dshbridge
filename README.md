@@ -39,7 +39,7 @@
 
 **微信线**
 - **纯官方协议**：ClawBot 插件扫码绑定，`getUpdates` 长轮询收消息、`sendMessage` 发消息，全程 HTTPS，不碰任何非官方 Hook
-- **常驻自愈**：wx-bot 以 systemd 服务运行；收件箱 hook 5 秒轮询唤醒 Muse；watchdog hook 在云 VM 被替换、`/etc` 被清空时自动重装服务
+- **常驻自愈**：wx-bot 以 systemd 服务运行；收件箱 hook 5 秒轮询唤醒 Muse；watchdog hook 在云 VM 被替换、`/etc` 被清空时自动重装服务（unit 缺失走快速分支、不等失败计数，实测 38 秒恢复）；并诚实标注边界——运行环境整体停摆时，机内自愈会一起失效，只能靠机外死亡开关发现（见 docs/WECHAT-BRIDGE.md 坑四）
 - **绑定风控解法**：云机房 IP 绑定会被腾讯风控拦——只在绑定阶段经 tailnet 借家庭网络出口扫码，通过后切回直连（实测收发均正常）
 
 ## 快速开始
@@ -62,7 +62,7 @@
 
 | 部分 | 文件夹 | 内容 |
 |---|---|---|
-| 一、微信链的优化 | [wechat-optimization/](wechat-optimization/) | 上下文连贯 + 对话隔离（ctx.py）、stallwatch 10 分钟误报刷屏的补丁修复、systemd 模板修复、hook 轮询与自愈、通知与回复规矩 |
+| 一、微信链的优化 | [wechat-optimization/](wechat-optimization/) | 上下文连贯 + 对话隔离（ctx.py）、stallwatch 10 分钟误报刷屏的补丁修复、systemd 模板修复、hook 轮询与自愈（unit 缺失快速分支）、无声断线的机外死亡开关备选设计、通知与回复规矩 |
 | 二、第一次连接微信出问题怎么办 | [wechat-first-connect/](wechat-first-connect/) | 前置清单、扫码绑定被腾讯风控拦（运行环境存在风险）的解法、health 非 0、登录过期 `expired / -14`、`no context_token`、消息重复唤醒、二维码旧码缓存、云 VM 替换丢服务、接通验收标准 |
 | 三、DSH 的连接 | [dsh-connection/](dsh-connection/) | 通道结构（8443 tailnet-only → 适配器 → Relay）、为什么不能直连 Relay、OAuth 建连三步、token 自续轮换纪律、客户端与派发流程、`FORBIDDEN / expired` 适配器层问题、安全边界 |
 
@@ -80,7 +80,7 @@
 - **relay 静态 token 永不离开 Windows 本机**；对外只有可吊销、短时效的 OAuth token
 - 8443 通道 **tailnet-only**，不经公网；公网桥见姊妹项目 [dsh-gptbridge](https://github.com/ksoulness/dsh-gptbridge)
 - 微信侧只处理绑定用户本人的白名单私聊；回复只发纯文本
-- 微信对话与其他会话互不串扰：独立 binding 与白名单收件箱、独立唤醒 worker 处理、回复只发回用户本人（详见 docs/WECHAT-BRIDGE.md 第 9 节）
+- 微信对话与其他会话互不串扰：独立 binding 与白名单收件箱、独立唤醒 worker 处理、回复只发回用户本人（详见 docs/WECHAT-BRIDGE.md 第 10 节）
 - 本仓库**不含任何真实凭据**：token、口令、wxid、tailnet 名均为占位符，部署时替换为你自己的
 
 ## 目录

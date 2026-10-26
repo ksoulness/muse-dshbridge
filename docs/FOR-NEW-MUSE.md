@@ -40,7 +40,8 @@
 
 - 只处理绑定用户本人的白名单私聊；**回复微信只发纯文本、不用 Markdown**
 - 服务好坏只认 `wx-bot health --binding muse --grace 0` 的**退出码 0**，不看「进程在跑」
-- 在会被替换的云 VM 上必须装 watchdog hook（/etc 会被清空），否则 VM 一换微信就断
+- 在会被替换的云 VM 上必须装 watchdog hook（/etc 会被清空），否则 VM 一换微信就断；且 watchdog 里 **unit 文件缺失必须立即重装、不走失败计数**，systemd 模板的 StartLimit 两键必须在模板源文件的 `[Unit]` 段（细则见 WECHAT-BRIDGE.md 坑二、WECHAT-SETUP-PROMPT.md 第 8 步）
+- 运行环境整体停摆时，机内自愈与告警会一起失效（可无声十几小时）——这在机内无解，部署时要把机外死亡开关的选项摆给用户拍板，不要承诺机内监控能兜住（见 WECHAT-BRIDGE.md 坑四）
 
 验收标准：health 退出码 0 + 用户微信发消息你能收到并回复 + 发图能送达，三条全过。
 

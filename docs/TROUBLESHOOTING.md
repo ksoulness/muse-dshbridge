@@ -21,6 +21,10 @@
 | 扫码时手机弹「运行环境存在风险，暂无法连接」 | 腾讯按出口 IP 风控，机房 IP 绑定必拦；二维码约 121 秒服务端过期、无错误码 | 绑定阶段改走家庭网络出口（tailnet 到家用设备开临时代理），绑好立刻切回直连 |
 | wx-bot 服务 active 但 health 非 0 | env 没写代理、登录态失效等都会这样，active ≠ 可用 | 以 `wx-bot health --binding muse --grace 0` 退出码为准，按输出与仓库 troubleshoot.md 处理 |
 | 服务突然消失 / unit 不存在 | 云 VM 被替换，/etc 被清空（登录态在 home 还在） | watchdog hook 自动重装 unit 拉起；没有 watchdog 的环境按部署第 4 步手动重装，不用重扫 |
+| 每次 VM 重启后都要断 2–3 分钟才自愈 | watchdog 把「unit 文件不存在」也套了多轮失败计数/防抖，白等好几轮才动手 | 看守加确定性快速分支：unit 缺失不等计数、立即重装拉起（实测恢复 38 秒）；防抖只保留给「unit 存在但 health 失败」；改法见 WECHAT-BRIDGE.md 坑二 |
+| 断线数小时无人知晓、没有任何告警，查日志发现两个 hook 日志同一分钟一起断档 | 运行环境整体停摆：看守、检测、告警同机同生共死，停摆期间谁都跑不了；不是桥或某个 hook 的 bug，不要在机内追查 | 机内无解。恢复靠环境被唤醒后自愈；防「无声」只能机外死亡开关（桥每分钟向机外报平安、超时桥外通道报警），装不装由用户拍板；见 WECHAT-BRIDGE.md 坑四 |
+| systemd 报 StartLimit 相关 `Unknown key name` / 重启速率限制不生效 | 模板把 `StartLimitIntervalSec` / `StartLimitBurst` 写在了 `[Service]` 段，被 systemd 忽略 | 两键移到 `[Unit]` 段，**必须改模板源文件**并按新模板重装；只改现行 unit 会被下一次自愈重装覆盖 |
+| 想把 wx-bot 单独搬到稳定 VPS 根除断线 | pull 投递靠 Muse 在本机执行 `inbox pull/send` 读写本机状态，桥搬走 pull 链路就断 | 迁移必须连投递一起设计：改 webhook、或 hook 经 Tailscale/SSH 远程执行 pull/send、或加转发层；切换先停旧再启新，防双实例抢 cursor；见 WECHAT-BRIDGE.md 坑四 |
 | `send` 报 `no context_token` | 对方还没先给 ClawBot 发过消息 | 等对方先发一条，再回复 |
 | `send` 报 `expired` / `-14` | 登录过期 | 重新扫码登录 + `systemctl restart wx-bot` |
 | 二维码图发过去总是同一张旧码 | 聊天按文件路径缓存图片 | 每次新码用新路径发原图，不要改名/复制到固定文件名 |

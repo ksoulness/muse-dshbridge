@@ -80,8 +80,16 @@
 会被替换的 VM 在替换后 `/etc/systemd/system` 下的 unit 消失、服务全灭
 （登录态在 home，不受影响，不用重扫）。治本办法是按
 [docs/WECHAT-BRIDGE.md](../docs/WECHAT-BRIDGE.md) 第 2 节第 6 步加 **watchdog hook**：
-60 秒轮询 health，unit 被清掉就自动重装并拉起。没有 watchdog 的环境，
+60 秒轮询，unit 被清掉就自动重装并拉起。没有 watchdog 的环境，
 按部署第 4 步手动重装单元文件并 `enable --now` 即可。
+
+写 watchdog 时有一条硬性要求：**unit 文件不存在时必须立即重装、不许走
+失败计数/防抖**——unit 缺失是换机后的确定状态，套上多轮计数只会让每次
+断线白白多出约 2 分钟（实测对比：走计数约 2–3 分钟恢复，加快速分支后
+模拟删 unit 仅 38 秒恢复）。防抖只用于「unit 存在但 health 失败」的
+瞬时抖动。另外注意：若断线长达数小时且**没有任何告警**、两个 hook 的
+日志同一分钟一起断档，那是运行环境整体停摆，机内自愈原理上救不了，
+看 [docs/WECHAT-BRIDGE.md](../docs/WECHAT-BRIDGE.md) 坑四，不要当桥的 bug 追。
 
 ## 验收（三条全过才算接通）
 

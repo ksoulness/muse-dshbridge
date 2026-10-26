@@ -22,7 +22,7 @@
 
 4. **⚠️ 坑一（云环境绑定必遇，先看完再扫码）**：腾讯服务端按出口 IP 做风控。云电脑/机房 IP 扫码绑定会被拦：手机上弹「此 OpenClaw 的运行环境存在风险，暂无法连接」，二维码在服务端约 121 秒就过期、服务端不返回错误码；反复续码、改客户端都没用（官方仓库有同款 issue，别人卡了很久）。解法：**只在绑定阶段**让 wx-bot 的流量改走用户家庭网络出口——例如经 Tailscale 连到用户家里一台设备（Mac/PC）上临时跑一个代理，wx-bot 经本机中转代理链过去，扫码一次就能通过。**绑定成功后立刻把出口切回机房直连**（收发实测都正常），家里设备上的代理窗口可以关，中转只为了绑定，不要长期挂着。
 
-5. **常驻服务**：按手册第 4 步，取仓库 `adapters/muse/wx-bot.service` 模板，把 `__HOME__` 换成你 home 的绝对路径、`__USER__` 换成属主，装到 `/etc/systemd/system/wx-bot.service`，`systemctl daemon-reload && systemctl enable --now wx-bot`。验收：`wx-bot status` 显示 `logged_in: true`、`delivery: pull`；等 15 秒跑 `wx-bot health --binding muse --grace 0`，**退出码 0 才算装好**，不是 0 按输出和仓库 troubleshoot.md 处理，不要只看服务 active 就报成功。每次重扫或改了 env 文件都要 `systemctl restart wx-bot`。
+5. **常驻服务**：按手册第 4 步，取仓库 `adapters/muse/wx-bot.service` 模板，把 `__HOME__` 换成你 home 的绝对路径、`__USER__` 换成属主，装到 `/etc/systemd/system/wx-bot.service`，`systemctl daemon-reload && systemctl enable --now wx-bot`。**装之前先查模板**：`StartLimitIntervalSec` / `StartLimitBurst` 两键必须在 `[Unit]` 段（写在 `[Service]` 段会被 systemd 忽略）；模板不对，**先改模板源文件再装**——只改装好的 unit 文件，下一次自愈重装就会被模板打回原样。验收：`wx-bot status` 显示 `logged_in: true`、`delivery: pull`；等 15 秒跑 `wx-bot health --binding muse --grace 0`，**退出码 0 才算装好**，不是 0 按输出和仓库 troubleshoot.md 处理，不要只看服务 active 就报成功。每次重扫或改了 env 文件都要 `systemctl restart wx-bot`。
 
 6. **收件箱 hook**：按仓库 `adapters/muse/wechat-hook.sh` 写检测脚本，**poll_interval_secs 设为 5**（默认 60 太慢）。规则：`wx-bot inbox count --binding muse` 大于 0 就唤醒；否则跑 `wx-bot health --binding muse --liveness`，退出码非 0 时唤醒且文字以「wx-bot 异常：」开头（同一问题只唤醒一次、之后每小时最多再提醒一次）。先 dry_run 再 enable。
 
@@ -34,8 +34,19 @@
    - 回复微信**只发纯文本**，不要 Markdown，链接直接写网址。发文字一律用 heredoc：`wx-bot send --binding muse --to <from_wxid> --text - <<'EOF'` … `EOF`；发图片/文件用 `--image` / `--file`。长任务先回一句简短确认，做完再发结果。
    - `send` 失败含义：`no context_token` = 对方还没先给 ClawBot 发过消息，等对方先发；`expired` 或 `-14` = 登录过期，按第 3 步重扫并重启服务。失败情况在主聊天告诉用户，不要反复重试。
 
-8. **⚠️ 坑二（会被替换的云 VM 必加）**：如果你的运行环境是会被平台替换的 VM，替换后 /etc 下的 systemd unit 会被清空、服务全灭（登录态存在 home 里，不用重扫）。加一个 watchdog hook（60 秒轮询）：health 存活检查失败时自动按第 5 步重装 unit 并拉起服务，修不好才唤醒报告。实测靠它自愈过 VM 替换和服务短停。
+8. **⚠️ 坑二（会被替换的云 VM 必加，watchdog 写法有硬性要求）**：如果你的运行环境是会被平台替换的 VM，替换后 /etc 下的 systemd unit 会被清空、服务全灭（登录态存在 home 里，不用重扫）。加一个 watchdog hook（60 秒轮询），逻辑必须按下面写，**不要自己发明防抖方案**（实测教训：另一套同架构实例曾让「unit 缺失」也走连续 3 次失败计数，每次换机白白多断约 2 分钟；3 天 32 次重启，每次都断 2–3 分钟）：
+
+   - **先查 unit 文件、再查 health**：unit 文件不存在 = 换机后的确定状态，**立即按模板重装并拉起，不许走任何失败计数**；
+   - unit 存在但 health 失败，才走防抖（如连续 3 次失败再动手）——防抖只防瞬时抖动误杀，整体调小/取消会误杀健康服务，套在 unit 缺失上则纯属白等，两种错都不要犯；
+   - 拉起后等约 12 秒复查 health，退出码 0 才算修好，修不好才唤醒报告；dry_run 只报预测、不碰 systemd；
+   - 装好必须做模拟验收（请用户在场）：停服 + 删 unit 文件，看守应在下一轮约 1 分钟内恢复（实测 38 秒），且装回的 unit 里 StartLimit 两键在 `[Unit]` 段。
+   - 别试这两条死路（实测不通）：用户级 systemd（这类环境无用户总线）、`@reboot` cron（/var 同样不跨替换保留）。
+
+9. **⚠️ 环境整体停摆（WECHAT-BRIDGE.md 坑四；先讲清、由用户拍板）：运行环境整体停摆时，机内一切自愈都会失效。** 看守和告警都跑在这台会被停摆的机器上，环境被平台长时间暂停时，它们会一起停（实测发生过约 17.4 小时的无声断线：两个 hook 日志同一分钟一起断档、一起恢复，期间无自愈无告警，用户自己发现才知道）。这在机内**无解**，不要承诺「加个更勤的看守就行」。两个选项如实摆给用户决定：
+   - **机外死亡开关（推荐）**：桥每分钟探活通过后向机外服务（如 healthchecks.io）打一次心跳，机外超 5 分钟没收到就用桥外通道（邮件/飞书/ntfy 等）报警。注意是桥主动报平安，不是机外来轮询（wx-bot 接口只在本机，机外问不到）。用户同意才装；同意后必须做一次停发心跳测试验收。
+   - **不装**：用户若表示断线会自己回来找，就记录在案、不再主动推进，以后也不要把长时间无声断线当新 bug 重新追查。
+   另外提醒：将来若想把桥迁到稳定主机根除断线，**不能只搬 wx-bot**——pull 投递靠你在本机跑 `inbox pull/send`，搬走桥 pull 链路就断，迁移要连投递方式一起设计（见 WECHAT-BRIDGE.md 坑四），不要随口承诺「搬过去就行」。
 
 ## 验收
 
-三条都过才算接通：① `wx-bot health --binding muse --grace 0` 退出码 0；② 用户用微信给 ClawBot 发一条消息，你能收到并回复；③ `wx-bot send --image` 发一张图能送达。
+三条都过才算接通：① `wx-bot health --binding muse --grace 0` 退出码 0；② 用户用微信给 ClawBot 发一条消息，你能收到并回复；③ `wx-bot send --image` 发一张图能送达。云 VM 环境另加一条：④ 按第 8 步做模拟删 unit 测试，看守约 1 分钟内自愈。
