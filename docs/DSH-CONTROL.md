@@ -43,38 +43,58 @@ Relay 的 `RequestPolicy.authorize` 在源码层面锁死：请求来源必须�
 
 > ⚠️ 已知设计问题（使用前须知）：当前 scope 塌陷——单个 `dsh:read` 即可驱动 `start_run / steer_run / cancel_run`，且适配器对 `start_run` 默认注入 `danger-full-access`。派**实施类**任务前先和所有者确认权限档位；只读任务走 `start_review`（固定 read-only）不受影响。
 
-## 3. 下令定式（用户 → Muse）
+## 3. 下令定式（用户 → Muse）+ 派发前二次确认
 
 用户只需要一句话：
 
-> **在 `<工作区标题或路径>` 调用 DSH 执行 `<任务>`**
+> **指派 DSH 去完成 `<任务>`**（工作区/模型没点名就走默认）
 
-例如：「在主机NAS 调用 DSH 执行 检查根目录有几个 md 文件」。
+例如：「指派 DSH 去 NAS 上取一个文件」「让 DSH 在量化看下 XX」。
 
-Muse 侧自动补齐，不反问：
+### 3.1 派发前确认门（2026-11-09 改版，每个新事项必过）
 
-| 项 | 定式 |
+**旧口径已废止**：以前 Muse 收到下令就自动补齐、直接派发，不会先问用户——固定模型 `wb2api-nas / cn:deepseek-v4.1-flash`、不问不换。现在**改为二次确认**：
+
+1. 收到下令后，**先只回复确认、不调任何 `start_*`**。先按任务复杂度选好本次模型（默认或在允许范围内推荐，见下表），再套确认门句式（平台/模型换成本次选定的；会话状态如实注明）：
+
+   > 将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro` / `medium`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
+
+   会话变体（用户 2026-11-09 截图确认「就这样才是对的」）：上一条会话已归档、本轮是新事项要新开会话时，在工作区后加注说明——
+
+   > 将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro` / `medium`），DSH 工作区是 `E:\Code\Ops`（上一条会话已归档，这轮会新开一个会话），没问题就继续。
+
+2. 用户回「继续」→ 按确认的选型派发。用户有异议时按类型给**现查清单**让他挑，不猜、不默认替换：
+   - 说换模型：当场 `list_capabilities`，**只列可推荐范围**（wb2api 全部模型 + antigravity 的 Gemini 两个），等用户指定后再派。
+   - 说换目录：当场 `list_workspaces`，**只列路径在 `E:\Code\` 之下的已注册工作区**，等用户指定后再派。
+3. 确认门**只对新事项的首轮派发**。同一事项的后续轮次（收敛、转实施、纠偏、补答）继承首轮已确认的模型/工作区，不再重复确认；后续要换模型或换工作区才重新过门。
+4. 用户在下令的同一条消息里已经明确写了模型和/或工作区，视为已确认该项，确认门只报未定的那项；都写全了就直接报「按你写的 X/Y 派发」并执行。
+
+| 项 | 定式（2026-11-09 现行） |
 |---|---|
-| 工作区 | 按标题/路径查注册表（派发前 `list_workspaces` 复核仍在册） |
-| 模型 | **固定** `wb2api-nas / cn:deepseek-v4.1-flash`，不问不换；不可用就报告，不静默换 |
+| 工作区 | **默认** `E:\Code\Ops`（标题 Ops）；派发前 `list_workspaces` 现查现用，注册表已重构为 12 个，旧 15 个速查表作废 |
+| 模型 | **默认** `wb2api-nas / cn:deepseek-v4-pro / medium`；只许扫/用三个平台：wb2api（`wb2api-nas`，可自主选型）、antigravity（Gemini 两个可自主选型）、mq-gpt（仅用户强制指定才可用）；antigravity 的 `claude-opus-5-5-low/medium/high` 同 mq-gpt，仅指定可用、绝不推荐；不可用就报告，不静默换到范围外 |
 | 任务文本 | 以 `muse指派-` 开头接任务正文（忠实原话要点，只给范围/路径/验收，不贴源码） |
-| 工具 | 只读/核对 → `start_review`；明确要改文件 → `start_run`（先确认权限档） |
-| 会话 | `sessionMode: fresh`、`openBrowser: false` |
+| 工具 | 只读/核对 → `start_review`；明确要改文件 → `start_run` 或对正会话 `reply_run` 升档（先确认权限档） |
+| 会话 | **同一事项沿用同一会话**：新事项首轮才 `sessionMode: fresh`；后续轮次走 `reply_run`（可升权限档）或带原 `sessionId` 复用，不许每阶段另开新会话；`openBrowser: false` |
 | 授权依据 | `authorizationBasis: explicit-user-request` + 稳定 `idempotencyKey` |
 
 回报格式写死，每单必报：**runId、完整 sessionId、起止时间、终态、交付摘要（正文要点）、归档状态**。
 
-工作区速查（示例环境，部署时以 `list_workspaces` 为准）：主机NAS `E:\Code\主机NAS`、DSH `E:\Code\DSH`、量化 `E:\Code\poly`、合约 `E:\Code\perp`、商城 `E:\Code\商城` 等共 15 个。
-
 ## 4. 派发流程（客户端）
 
 ```
-doctor → list_workspaces（复核）→ list_capabilities（确认默认模型）
-  → start_review / start_run（响应里的 runId/operationId/sessionId 立即落盘）
+【确认门】先报模型+工作区 → 用户回「继续」（未过门不调任何 start_*）
+  → doctor → list_workspaces（复核）→ list_capabilities（只扫允许三平台，确认选型）
+  → 查同事项正会话（pending 登记 + 台账）：有未关闭 sessionId 就复用，不 fresh
+  → start_review / start_run（新事项首轮）或 reply_run（同事项续接）
+       （响应里的 runId/operationId/sessionId 立即落盘）
+  → 长单三件套：pending 登记 + watcher 子代理（tools/dsh_watch.py，deadline 制）
+       + per-task 5 分钟兜底 cron —— 没挂机制不许说「会跟进」
   → wait_run(timeoutMs=30000) 循环，直到终态
        succeeded | failed | cancelled | timeout | orphaned
   → 读 assistantText 自行复核（DSH 的自述 ≠ 验收通过）
-  → archive_terminal_session（archived:true 才算归档成功）
+       收到终态回执的那个回合必须当场续接/落实/汇报，不许只报完成再承诺下一轮
+  → 整件事结束才 archive_terminal_session，并回读复核 archived:true, running:false
   → 写台账 + 按格式回报用户
 ```
 
@@ -100,4 +120,4 @@ doctor → list_workspaces（复核）→ list_capabilities（确认默认模型
 
 - 工具 `archive_terminal_session { session_id: <完整 session-UUID>, confirm: true }` 是适配器本地工具（Relay 本体没有），它调 DSH Web 的归档 API
 - 历史坑：适配器持有的浏览器授据失效时回 `archive_pending / HTTP_401`——属 Windows 侧 grant 问题，修复后恢复 `archived: true`
-- 只归档自己本次的 fresh 会话，且必须在终态正文已消费之后；不按标题/日期批量归档，不动用户自己的会话
+- 只归档本事项的正会话，且必须在**整个事项结束**、终态正文已消费、无后续轮次之后；事项未结束不归档（后续轮次还要复用同一会话）；归档后必须再用 `list_workspace_sessions` 回读复核 `archived: true, running: false`，只凭归档调用返回值不算验完；不按标题/日期批量归档，不动用户自己的会话

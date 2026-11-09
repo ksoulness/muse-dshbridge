@@ -16,9 +16,9 @@
                                ▼                              ▼
                  Windows 电脑 · DSH            wx-bot（systemd 常驻，pull 模式）
                    Relay MCP :3079                    │ 微信 ClawBot 插件
-                   15 个工作区 / 模型固定              ▼
+                   12 个工作区 / 默认模型              ▼
                    wb2api-nas / cn:deepseek-      用户的微信
-                   v4.1-flash
+                   v4-pro（派发前二次确认）
 ```
 
 ## 为什么需要这两条线
@@ -32,10 +32,10 @@
 ## 特性
 
 **DSH 线**
-- **下令定式**：用户只说「在 `<工作区>` 调用 DSH 执行 `<任务>`」，客户端自动补齐：固定模型 `wb2api-nas / cn:deepseek-v4.1-flash`、任务前缀 `muse指派-`、fresh 会话、只读走 `start_review`、稳定幂等键。见 [docs/DSH-CONTROL.md](docs/DSH-CONTROL.md)
+- **下令定式 + 派发前二次确认（2026-11-09 改版）**：用户说「指派 DSH 去完成 `<任务>`」，Muse **不直接派**，先报确认门——默认模型 `wb2api-nas / cn:deepseek-v4-pro / medium`、默认工作区 `E:\Code\Ops`（可按复杂度在允许平台内推荐其他模型，确认门里一并报出），用户回「继续」才派发；任务前缀 `muse指派-`、同一事项沿用同一会话、只读走 `start_review`、稳定幂等键。旧口径「固定 flash、不问直接派」已废止。见 [docs/DSH-CONTROL.md](docs/DSH-CONTROL.md)
 - **长任务可靠姿势**：`wait_run` 每 30 秒一轮跟到终态（实测有单跑了 17 分 33 秒）；终态正文立即落盘，run 台账（runId / sessionId / 幂等键 / 起止 / 正文）自动记入本地 ledger
 - **token 自续**：access 过期自动用 refresh 轮换，新 token 对原子落盘（600 权限）；旧 refresh 重放会吊销整族，所以永远先落盘再干活
-- **验收闭环**：派发 → 等终态 → 读 `assistantText` 自行复核 → 归档会话（`archived: true` 才算数）→ 按固定格式回报
+- **验收闭环**：确认门通过 → 派发（长单先挂 pending 登记 + watcher + 兜底 cron）→ 等终态 → 读 `assistantText` 自行复核 → 整件事结束才归档正会话并回读复核（`archived: true, running: false` 才算数）→ 按固定格式回报
 
 **微信线**
 - **纯官方协议**：ClawBot 插件扫码绑定，`getUpdates` 长轮询收消息、`sendMessage` 发消息，全程 HTTPS，不碰任何非官方 Hook
@@ -103,6 +103,7 @@ docs/TROUBLESHOOTING.md    两条线的故障速查表
 skills/dsh-relay-operation/SKILL.md
                            交给 Muse 的 DSH 操作技能手册（定式版）
 tools/dsh_client.py        DSH 客户端：token 自续 + 台账 + 长超时重试
+tools/dsh_watch.py         长任务 watcher：deadline 制 wait_run 循环，跟进闭环用
 ```
 
 **让一个新的 Muse 学会这两件事**：把本仓库地址给它，并让它先读 `docs/FOR-NEW-MUSE.md`。仓库教方法，但权限不在仓库里——DSH 的 OAuth token 对要所有者在 Windows 侧签发后交付，微信要所有者装插件并扫码一次，这两步天然只能由人完成。

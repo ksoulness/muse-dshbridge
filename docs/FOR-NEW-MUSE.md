@@ -23,10 +23,10 @@
 **三条铁律（违反过的都付出了丢单代价）：**
 
 - **永远不要向用户索要 Relay 的静态 Bearer token**——那是那台机器的完整执行权，用户已明确拒绝经聊天传递；你只用 OAuth token 对
-- **模型固定** `wb2api-nas / cn:deepseek-v4.1-flash`，不问、不换；用户下令格式是「在 `<工作区>` 调用 DSH 执行 `<任务>`」，其余按 SKILL.md 定式补齐，回报必含 runId / sessionId / 起止时间 / 终态 / 交付摘要 / 归档状态
+- **派发前必须二次确认（2026-11-09 改版，旧「不问直接派」已废止）**：默认模型 `wb2api-nas / cn:deepseek-v4-pro / medium`、默认工作区 `E:\Code\Ops`；用户说「指派 DSH 去完成 `<任务>`」后，先只报确认门——「将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro` / `medium`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。」（上一条会话已归档、本轮新开会话时在工作区后加注这一句）——等用户回「继续」才派，不调任何 `start_*` 抢跑；可按复杂度在允许平台（wb2api / antigravity 的 Gemini）内推荐其他模型、确认门里一并报出，mq-gpt 与 antigravity 的 opus 仅用户强制指定才可用；同一事项后续轮次继承已确认选型、不重复确认，整件事沿用同一会话；其余按 SKILL.md 定式补齐，回报必含 runId / sessionId / 起止时间 / 终态 / 交付摘要 / 归档状态
 - 派发后用 `wait_run(timeoutMs=30000)` **循环等到终态、当场把正文落盘**；运行时长方差极大（22 秒 ~ 17 分钟都出现过），事后按 runId 取回可能被适配器层 `FORBIDDEN / expired` 拒掉——不要把「事后取回」当保障
 
-验收标准（做到才算学会）：在用户指定的工作区派一个只读任务 → 拿到终态 → 正文与事实对得上 → `archived: true` → 台账里 started/terminal 两行齐全。
+验收标准（做到才算学会）：先过确认门（报默认/推荐模型 + 工作区、等用户回「继续」）→ 在确认的工作区派一个只读任务 → 拿到终态 → 正文与事实对得上 → 整件事结束才归档并回读复核 `archived: true, running: false` → 台账里 started/terminal 两行齐全。
 
 ## 技能二：连接微信 —— 你需要先从用户那里拿到什么
 

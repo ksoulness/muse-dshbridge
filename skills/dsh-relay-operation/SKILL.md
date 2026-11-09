@@ -39,7 +39,8 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 ### 派发前确认门（每个新事项必过，2026-11-09 LEE 定）
 
 1. 用户说「指派 DSH 去完成 XX」后，**先只回复确认、不调任何 start_\***。先按复杂度选好本次模型（默认或推荐，见上节），再套这个句式（平台/模型换成本次选定的；偏离默认时可加一短句理由）：
-   > 将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
+   > 将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro` / `medium`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
+   会话状态要如实加注（2026-11-09 用户截图确认「就这样才是对的」）：上一条会话已归档、本轮是新事项要新开会话时，写成 `…DSH 工作区是 E:\Code\Ops（上一条会话已归档，这轮会新开一个会话），没问题就继续。`；同事项续接则注明沿用原会话，不许含糊带过。
 2. 用户回「继续」→ 按确认的选型派发。用户提出异议时按异议类型给现查清单让他挑，不猜、不默认替换：
    - 说**用其他模型 / 换模型**：当场跑 `list_capabilities`，**只列可推荐范围**（wb2api 全部模型 + antigravity 的 Gemini 两个），等用户指定 provider+model 后再派。范围外平台不列出、不提及；仅指定可用模型（mq-gpt、opus）只有他当次点名才列、才可用。
    - 说**其他目录 / 换目录**：当场跑 `list_workspaces`，**只列路径在 `E:\Code\` 之下的已注册工作区**（标题+路径），等用户指定后再派。`E:\Code` 之外的注册项（如 `D:\Program Files\DSH\bot\workspace`）不进候选；用户点名 `E:\Code` 之外的路径时先说明这条限制再请他确认。

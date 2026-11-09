@@ -85,12 +85,17 @@ MCP 端点是无状态的（每次 POST 新建 transport），客户端进程不
 （含 assistantText 全文截断备份）。
 
 ```
-doctor → list_workspaces（复核）→ list_capabilities（确认默认模型）
-  → start_review / start_run（响应里的 runId/operationId/sessionId 立即落盘）
+【派发前二次确认门，2026-11-09 改版】先报模型+工作区，等用户回「继续」才派
+  默认：wb2api 平台的 DeepSeek V4 Pro（wb2api-nas / cn:deepseek-v4-pro / medium）
+        + 工作区 E:\Code\Ops；旧口径「固定 flash、不问直接派」已废止，
+        完整规则（允许平台、异议清单、同事项单会话）见 SKILL.md 首节
+  → doctor → list_workspaces（复核）→ list_capabilities（确认选型）
+  → start_review / start_run（新事项首轮）或 reply_run（同事项续接同一会话）
+       （响应里的 runId/operationId/sessionId 立即落盘；长单挂 watcher + 兜底 cron）
   → wait_run(timeoutMs=30000) 循环，直到终态
        succeeded | failed | cancelled | timeout | orphaned
   → 读 assistantText 自行复核（DSH 的自述 ≠ 验收通过）
-  → archive_terminal_session（archived:true 才算归档成功）
+  → 整件事结束才 archive_terminal_session，并回读复核 archived:true, running:false
   → 写台账 + 按格式回报用户
 ```
 
