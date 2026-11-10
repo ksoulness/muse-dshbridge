@@ -26,11 +26,18 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 **wb2api 全模型**（2026-11-09 实查）：`cn:deepseek-v4-pro`、`cn:deepseek-v4.1-flash`（x0.11）、`cn:hy3`（x0.00）、`cn:hy4free`、`cn:glm-5.3-flash`（x0.06）、`cn:space-bunny`（x0.03）、`cn:minimax-m3.1-flash`。
 **antigravity 全模型**：可推荐的只有 `gemini-4-argon`、`gemini-3.8-flash`；`claude-opus-5-5-low` / `-medium` / `-high` 仅指定可用。
 
-### 默认值与选型（2026-11-10 LEE 改定，取代 11-09 的复杂度分层选型）
+### 默认值与选型（2026-11-10 LEE 定版：默认 flash/high + 按复杂度分层建议，不取消分层）
 
-- **默认模型**：provider `wb2api-nas`、model `cn:deepseek-v4.1-flash`（显示名 DeepSeek V4.1 Flash）。**一切事项默认都用它**，不再按复杂度分层自主选型。注意传参（2026-11-10 经 DSH 查 relay 的 `list_capabilities` 清单实证定版）：flash 的 reasoningEffort 合法取值只有 `low` / `high` / `max`——**没有 medium、没有 off（关闭推理）**，且该条目无 defaultEffort 字段；同组 hy3、glm-5.3-flash、v4-pro 都有 off，唯独 flash 没有，不是 relay 漏传，是上游条目本身就这样。省略 reasoningEffort 时走上游默认（无字段、具体档位不可知）——DSH 实查回报里原本如此建议，但 **LEE 在实查后另定：默认一律显式传 `reasoningEffort: "high"`（统一好记），不走省略**；只有明确要更快或要质量拉满时才改 low/max，传 medium/off 必报 model-unavailable（纯枚举拒绝，relay 本身没毛病）。
-- **换模型的唯一通道＝建议**：仅当 Muse 判断 flash 不能满足该事项需求时，才可以在确认门里向 LEE **建议**换另一个允许范围内的模型（wb2api 其他模型或 antigravity 的 Gemini 两个），说清理由，等 LEE 点头才用；LEE 不点头就用 flash 派。**不推荐 opus、不推荐 mq-gpt**（仅指定可用，见上）。
-- 选型只换模型不换确认门：建议了非默认模型，确认门里照样先报、等「继续」。
+- **默认模型（无特别建议时的基准）**：provider `wb2api-nas`、model `cn:deepseek-v4.1-flash`（显示名 DeepSeek V4.1 Flash）、`reasoningEffort: "high"`。LEE 定默认显式传 high（统一好记），不走省略——省略时走上游默认，但 flash 条目无 defaultEffort 字段、具体档位不可知。
+- **按复杂度分层保留，但走建议制（2026-11-10 LEE 纠正：分层不取消）**：Muse 先按任务复杂度判档，在**确认门里把推荐的模型+档位连同理由一起报给 LEE**，等 LEE 点头（回「继续」）才按推荐派；LEE 不点头就回默认 flash/high 派。分层是「建议」不是自主换——不许绕过确认门自行换模型：
+  - 简单/常规（只读核对、列目录、查状态、格式化、小改动）→ 推荐 flash 本身（图快用 `low`、稳妥用默认 `high`）或更轻的 wb2api 轻模型（如 `cn:hy3`）。
+  - 标准/复杂（多文件实施、架构讨论、疑难排查、长推理）→ 推荐 `cn:deepseek-v4-pro`（`medium`；最难的 quality-first 任务升 `high` / `max`）。
+  - 需要换个家族的视角（复核另一模型的结论、长上下文梳理、Gemini 更擅长的审读类）→ 推荐 antigravity `gemini-4-argon` 或 `gemini-3.8-flash`。
+  - **不推荐 opus、不推荐 mq-gpt**（仅指定可用，见上）。
+- **档位必须按模型各查各的——有些模型没有 medium（硬规矩，2026-11-10 LEE 提醒 + 实查定版）**：reasoningEffort 的合法取值**逐模型不同、不可套用别家的**，派发前必须按所选模型在 `list_capabilities` 里的那一条选，清单变了以现查为准。已实查的各模型档位（2026-11-09/10）：
+  - `cn:deepseek-v4.1-flash`：只有 `low` / `high` / `max`——**没有 medium、没有 off（关闭推理）**，且无 defaultEffort 字段；同组其他模型都有 off，唯独它没有，不是 relay 漏传，是上游条目本身就这样；给它传 medium/off 必报 model-unavailable（纯枚举拒绝，relay 本身没毛病）。
+  - `cn:deepseek-v4-pro`、`cn:hy3`、`cn:hy4free`、`cn:glm-5.3-flash`、`cn:space-bunny`、`cn:minimax-m3.1-flash`：`off` / `low` / `medium` / `high` / `max`（这些才有 medium）。
+  - antigravity `gemini-4-argon`、`gemini-3.8-flash`：只有 `low` / `medium` / `high`——没有 max、没有 off，别给它们传 max。
 - **默认工作区**：`E:\Code\Ops`（标题 Ops，workspaceId `3fec5dd9-1f19-4404-943e-a1cf3f54e41f`）。工作区注册表已重构（2026-11-09 实查 12 个），旧 15 个速查表作废，派发前一律用 `list_workspaces` 现查现用。
 
 ### 派发前确认门（每个新事项必过，2026-11-09 LEE 定）
