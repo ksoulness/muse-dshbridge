@@ -26,20 +26,17 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 **wb2api 全模型**（2026-11-09 实查）：`cn:deepseek-v4-pro`、`cn:deepseek-v4.1-flash`（x0.11）、`cn:hy3`（x0.00）、`cn:hy4free`、`cn:glm-5.3-flash`（x0.06）、`cn:space-bunny`（x0.03）、`cn:minimax-m3.1-flash`。
 **antigravity 全模型**：可推荐的只有 `gemini-4-argon`、`gemini-3.8-flash`；`claude-opus-5-5-low` / `-medium` / `-high` 仅指定可用。
 
-### 默认值与自主选型（2026-11-09 LEE 定）
+### 默认值与选型（2026-11-10 LEE 改定，取代 11-09 的复杂度分层选型）
 
-- **默认模型**：provider `wb2api-nas`、model `cn:deepseek-v4-pro`（显示名 DeepSeek V4 Pro）、`reasoningEffort: "medium"`（也是系统默认三元组）。
-- **可按复杂度自主选型**（只在 wb2api 与 antigravity 内）：派单前先判任务复杂度，在确认门里报出推荐的那一个（没特别推荐就用默认 v4 pro）：
-  - 简单/常规（只读核对、列目录、查状态、格式化、小改动）→ wb2api `cn:deepseek-v4.1-flash`（low/medium）或更轻的 `cn:hy3`；图快图省即可，不必上 pro。
-  - 标准/复杂（多文件实施、架构讨论、疑难排查、长推理）→ 默认 `cn:deepseek-v4-pro`（medium；最难的 quality-first 任务升 high/max）。
-  - 需要换个家族的视角（复核 pro 的结论、长上下文梳理、Gemini 更擅长的审读类）→ antigravity `gemini-4-argon`（high）或 `gemini-3.8-flash`。再难也只在 wb2api pro 升 effort 与 argon 之间选，**不推荐 opus、不推荐 mq-gpt**（仅指定可用，见上）。
-  - 选型只换模型不换确认门：推荐了非默认模型，确认门里照样先报、等「继续」。
+- **默认模型**：provider `wb2api-nas`、model `cn:deepseek-v4.1-flash`（显示名 DeepSeek V4.1 Flash）。**一切事项默认都用它**，不再按复杂度分层自主选型。注意传参（2026-11-10 经 DSH 查 relay 的 `list_capabilities` 清单实证定版）：flash 的 reasoningEffort 合法取值只有 `low` / `high` / `max`——**没有 medium、没有 off（关闭推理）**，且该条目无 defaultEffort 字段；同组 hy3、glm-5.3-flash、v4-pro 都有 off，唯独 flash 没有，不是 relay 漏传，是上游条目本身就这样。省略 reasoningEffort 时走上游默认（无字段、具体档位不可知）——DSH 实查回报里原本如此建议，但 **LEE 在实查后另定：默认一律显式传 `reasoningEffort: "high"`（统一好记），不走省略**；只有明确要更快或要质量拉满时才改 low/max，传 medium/off 必报 model-unavailable（纯枚举拒绝，relay 本身没毛病）。
+- **换模型的唯一通道＝建议**：仅当 Muse 判断 flash 不能满足该事项需求时，才可以在确认门里向 LEE **建议**换另一个允许范围内的模型（wb2api 其他模型或 antigravity 的 Gemini 两个），说清理由，等 LEE 点头才用；LEE 不点头就用 flash 派。**不推荐 opus、不推荐 mq-gpt**（仅指定可用，见上）。
+- 选型只换模型不换确认门：建议了非默认模型，确认门里照样先报、等「继续」。
 - **默认工作区**：`E:\Code\Ops`（标题 Ops，workspaceId `3fec5dd9-1f19-4404-943e-a1cf3f54e41f`）。工作区注册表已重构（2026-11-09 实查 12 个），旧 15 个速查表作废，派发前一律用 `list_workspaces` 现查现用。
 
 ### 派发前确认门（每个新事项必过，2026-11-09 LEE 定）
 
-1. 用户说「指派 DSH 去完成 XX」后，**先只回复确认、不调任何 start_\***。先按复杂度选好本次模型（默认或推荐，见上节），再套这个句式（平台/模型换成本次选定的；偏离默认时可加一短句理由）：
-   > 将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro` / `medium`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
+1. 用户说「指派 DSH 去完成 XX」后，**先只回复确认、不调任何 start_\***。先定好本次模型（默认 flash/high，或拟向 LEE 建议的允许模型，见上节），再套这个句式（平台/模型换成本次选定的；偏离默认时可加一短句理由）：
+   > 将使用模型 wb2api 平台的 DeepSeek V4.1 Flash（`wb2api-nas` / `cn:deepseek-v4.1-flash` / `high`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
    会话状态要如实加注（2026-11-09 用户截图确认「就这样才是对的」）：上一条会话已归档、本轮是新事项要新开会话时，写成 `…DSH 工作区是 E:\Code\Ops（上一条会话已归档，这轮会新开一个会话），没问题就继续。`；同事项续接则注明沿用原会话，不许含糊带过。
 2. 用户回「继续」→ 按确认的选型派发。用户提出异议时按异议类型给现查清单让他挑，不猜、不默认替换：
    - 说**用其他模型 / 换模型**：当场跑 `list_capabilities`，**只列可推荐范围**（wb2api 全部模型 + antigravity 的 Gemini 两个），等用户指定 provider+model 后再派。范围外平台不列出、不提及；仅指定可用模型（mq-gpt、opus）只有他当次点名才列、才可用。
@@ -119,7 +116,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 ## 标准作业流程（源自两仓库 skill，不得简化）
 
 1. `list_workspaces` 按真实路径选已注册工作区；不凭调用方 cwd 猜。
-2. `list_capabilities` 取真实 provider/model/reasoningEffort/权限；不猜模型标识、不静默换提供商。扫描只看允许范围三平台（wb2api/antigravity/mq-gpt，其余 provider 忽略）。选型按首节确认门结果（默认 `wb2api-nas` / `cn:deepseek-v4-pro` / `medium`，或已确认的推荐选型），模型不可用就报告。
+2. `list_capabilities` 取真实 provider/model/reasoningEffort/权限；不猜模型标识、不静默换提供商。扫描只看允许范围三平台（wb2api/antigravity/mq-gpt，其余 provider 忽略）。选型按首节确认门结果（默认 `wb2api-nas` / `cn:deepseek-v4.1-flash` / `high`，或已确认的建议选型），模型不可用就报告。
 3. 派发前先查同事项正会话：扫 pending 登记 + runs-ledger，有同事项未关闭 sessionId 就复用（见「同一事项沿用同一会话」节），不 fresh。派发参数：`workspace`、`task`（只给范围/路径/授权/验收，**不贴源码、diff、压缩包**，由 DSH 自己读）、`provider`、`model`、`reasoningEffort`、`openBrowser: false`、稳定 `idempotencyKey`、`authorizationBasis: "explicit-user-request"`（仅在用户明确要求调用 DSH 时）。新事项首轮才用 `sessionMode: "fresh"`；复用走 `reply_run` 或带 `sessionId` 的 start_\*。
    - 只读任务走 `start_review`，并给 `reviewTargets`、`contextReadScope`、`excludedPaths`（凭据、.env、浏览器存储、生产数据等）。
    - 实施任务走 `start_run` + `permissionPreset: "workspace-write"` + `writeScope` 限定写入位置，或对正会话 `reply_run` 升档；任务文本声明：保留已有改动、无 commit/push/外部消息/凭据访问/破坏性清理授权。

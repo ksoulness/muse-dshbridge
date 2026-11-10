@@ -86,7 +86,7 @@ MCP 端点是无状态的（每次 POST 新建 transport），客户端进程不
 
 ```
 【派发前二次确认门，2026-11-09 改版】先报模型+工作区，等用户回「继续」才派
-  默认：wb2api 平台的 DeepSeek V4 Pro（wb2api-nas / cn:deepseek-v4-pro / medium）
+  默认：wb2api 平台的 DeepSeek V4.1 Flash（wb2api-nas / cn:deepseek-v4.1-flash / high；flash 档位只有 low/high/max，无 medium/off）
         + 工作区 E:\Code\Ops；旧口径「固定 flash、不问直接派」已废止，
         完整规则（允许平台、异议清单、同事项单会话）见 SKILL.md 首节
   → doctor → list_workspaces（复核）→ list_capabilities（确认选型）

@@ -18,7 +18,7 @@
                    Relay MCP :3079                    │ 微信 ClawBot 插件
                    12 个工作区 / 默认模型              ▼
                    wb2api-nas / cn:deepseek-      用户的微信
-                   v4-pro（派发前二次确认）
+                   v4.1-flash / high（派发前二次确认）
 ```
 
 ## 为什么需要这两条线
@@ -32,7 +32,7 @@
 ## 特性
 
 **DSH 线**
-- **下令定式 + 派发前二次确认（2026-11-09 改版）**：用户说「指派 DSH 去完成 `<任务>`」，Muse **不直接派**，先报确认门——默认模型 `wb2api-nas / cn:deepseek-v4-pro / medium`、默认工作区 `E:\Code\Ops`（可按复杂度在允许平台内推荐其他模型，确认门里一并报出），用户回「继续」才派发；任务前缀 `muse指派-`、同一事项沿用同一会话、只读走 `start_review`、稳定幂等键。旧口径「固定 flash、不问直接派」已废止。见 [docs/DSH-CONTROL.md](docs/DSH-CONTROL.md)
+- **下令定式 + 派发前二次确认（2026-11-09 改版，默认模型 2026-11-10 改为 flash/high）**：用户说「指派 DSH 去完成 `<任务>`」，Muse **不直接派**，先报确认门——默认模型 `wb2api-nas / cn:deepseek-v4.1-flash / high`、默认工作区 `E:\Code\Ops`（默认一律 flash；只有 Muse 判断 flash 不能满足需求时才在确认门里建议换允许范围内的其他模型，等用户点头才换），用户回「继续」才派发；任务前缀 `muse指派-`、同一事项沿用同一会话、只读走 `start_review`、稳定幂等键。旧口径「不问直接派」已废止（默认模型本身 2026-11-10 又定为 flash/high，但必须过确认门）。见 [docs/DSH-CONTROL.md](docs/DSH-CONTROL.md)
 - **长任务可靠姿势**：`wait_run` 每 30 秒一轮跟到终态（实测有单跑了 17 分 33 秒）；终态正文立即落盘，run 台账（runId / sessionId / 幂等键 / 起止 / 正文）自动记入本地 ledger
 - **token 自续**：access 过期自动用 refresh 轮换，新 token 对原子落盘（600 权限）；旧 refresh 重放会吊销整族，所以永远先落盘再干活
 - **验收闭环**：确认门通过 → 派发（长单先挂 pending 登记 + watcher + 兜底 cron）→ 等终态 → 读 `assistantText` 自行复核 → 整件事结束才归档正会话并回读复核（`archived: true, running: false` 才算数）→ 按固定格式回报

@@ -53,15 +53,15 @@ Relay 的 `RequestPolicy.authorize` 在源码层面锁死：请求来源必须�
 
 ### 3.1 派发前确认门（2026-11-09 改版，每个新事项必过）
 
-**旧口径已废止**：以前 Muse 收到下令就自动补齐、直接派发，不会先问用户——固定模型 `wb2api-nas / cn:deepseek-v4.1-flash`、不问不换。现在**改为二次确认**：
+**旧口径已废止**：以前 Muse 收到下令就自动补齐、直接派发，不会先问用户、不问不换。废止的是这种不问直接派（默认模型本身几经变更，2026-11-10 现行定为 flash/high，见下表）；现在**改为二次确认**：
 
-1. 收到下令后，**先只回复确认、不调任何 `start_*`**。先按任务复杂度选好本次模型（默认或在允许范围内推荐，见下表），再套确认门句式（平台/模型换成本次选定的；会话状态如实注明）：
+1. 收到下令后，**先只回复确认、不调任何 `start_*`**。先定好本次模型（默认 flash/high，或拟建议的允许模型，见下表），再套确认门句式（平台/模型换成本次选定的；会话状态如实注明）：
 
-   > 将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro` / `medium`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
+   > 将使用模型 wb2api 平台的 DeepSeek V4.1 Flash（`wb2api-nas` / `cn:deepseek-v4.1-flash` / `high`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
 
    会话变体（用户 2026-11-09 截图确认「就这样才是对的」）：上一条会话已归档、本轮是新事项要新开会话时，在工作区后加注说明——
 
-   > 将使用模型 wb2api 平台的 DeepSeek V4 Pro（`wb2api-nas` / `cn:deepseek-v4-pro` / `medium`），DSH 工作区是 `E:\Code\Ops`（上一条会话已归档，这轮会新开一个会话），没问题就继续。
+   > 将使用模型 wb2api 平台的 DeepSeek V4.1 Flash（`wb2api-nas` / `cn:deepseek-v4.1-flash` / `high`），DSH 工作区是 `E:\Code\Ops`（上一条会话已归档，这轮会新开一个会话），没问题就继续。
 
 2. 用户回「继续」→ 按确认的选型派发。用户有异议时按类型给**现查清单**让他挑，不猜、不默认替换：
    - 说换模型：当场 `list_capabilities`，**只列可推荐范围**（wb2api 全部模型 + antigravity 的 Gemini 两个），等用户指定后再派。
@@ -69,10 +69,10 @@ Relay 的 `RequestPolicy.authorize` 在源码层面锁死：请求来源必须�
 3. 确认门**只对新事项的首轮派发**。同一事项的后续轮次（收敛、转实施、纠偏、补答）继承首轮已确认的模型/工作区，不再重复确认；后续要换模型或换工作区才重新过门。
 4. 用户在下令的同一条消息里已经明确写了模型和/或工作区，视为已确认该项，确认门只报未定的那项；都写全了就直接报「按你写的 X/Y 派发」并执行。
 
-| 项 | 定式（2026-11-09 现行） |
+| 项 | 定式（2026-11-10 现行） |
 |---|---|
 | 工作区 | **默认** `E:\Code\Ops`（标题 Ops）；派发前 `list_workspaces` 现查现用，注册表已重构为 12 个，旧 15 个速查表作废 |
-| 模型 | **默认** `wb2api-nas / cn:deepseek-v4-pro / medium`；只许扫/用三个平台：wb2api（`wb2api-nas`，可自主选型）、antigravity（Gemini 两个可自主选型）、mq-gpt（仅用户强制指定才可用）；antigravity 的 `claude-opus-5-5-low/medium/high` 同 mq-gpt，仅指定可用、绝不推荐；不可用就报告，不静默换到范围外 |
+| 模型 | **默认** `wb2api-nas / cn:deepseek-v4.1-flash / high`（2026-11-10 改定，不再按复杂度分层；flash 的 reasoningEffort 只有 `low/high/max`，无 `medium`、无 `off`、无 defaultEffort 字段，传 medium/off 必报 model-unavailable；省略该参数走上游默认，但 LEE 定默认显式传 `high` 好记）；换模型只能由 Muse 在确认门里建议、用户点头才换；只许扫/用三个平台：wb2api（`wb2api-nas`）、antigravity（Gemini 两个可自主选型）、mq-gpt（仅用户强制指定才可用）；antigravity 的 `claude-opus-5-5-low/medium/high` 同 mq-gpt，仅指定可用、绝不推荐；不可用就报告，不静默换到范围外 |
 | 任务文本 | 以 `muse指派-` 开头接任务正文（忠实原话要点，只给范围/路径/验收，不贴源码） |
 | 工具 | 只读/核对 → `start_review`；明确要改文件 → `start_run` 或对正会话 `reply_run` 升档（先确认权限档） |
 | 会话 | **同一事项沿用同一会话**：新事项首轮才 `sessionMode: fresh`；后续轮次走 `reply_run`（可升权限档）或带原 `sessionId` 复用，不许每阶段另开新会话；`openBrowser: false` |
