@@ -55,6 +55,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 
 - task 以 `muse指派-` 开头接任务正文（正文忠实于用户原话要点，不自行扩大范围、不贴源码）；`openBrowser: false`、`authorizationBasis: "explicit-user-request"`、稳定 `idempotencyKey`。首轮新会话 `sessionMode: "fresh"`；复用会话按上一节走 reply_run / 带 sessionId。只读/核对/调研 → `start_review`（read-only）；改文件/实施 → `start_run` 或 reply_run 升档（派发前按适配器现状确认权限档，见安全边界）。
 - **执行工具**：`~/workspace/dsh-study/tools/dsh_client.py`（已内置：从 600 隐藏文件读 token、过期自动 refresh 并原子落盘新对、长超时、空响应自动重试）。不要再手拼 curl。
+- **派发前 manifest 校验（2026-11-13 LEE 批准移植，自 dsh-codex-kit 的 `build_task_manifest.py`）**：凡派单带结构化范围（`reviewTargets`/`contextReadScope`/`excludedPaths`/`writeScope` 任一），派发前先跑 `python3 ~/workspace/dsh-study/tools/build_task_manifest.py <工作区路径> --path … --context-path … --scope <单行范围> [--permission-mode … --write-path …] --idempotency-key <本单键> --out ~/workspace/dsh-study/hidden_files/manifests/<idempotencyKey>.json` 生成清单，**清单里的四组路径原样用作派发参数**。校验器是远程词法版：只查路径规范化/逃逸、目标⊆可读范围、目标∩排除=∅、只读禁写/写模式必给写范围、scope 单行 ≤2000 字禁贴代码；工作区在 Windows、本机不验存在性（manifest 标 `existenceVerified:false`，存在性由 DSH 读盘坐实），默认排除 `.env`/`.credentials.yaml`/`.git`。校验不过＝不派发、先修范围再报。`dsh_client.py` 内置同一校验的硬门：带结构化字段却缺 `reviewTargets`/`contextReadScope` 或关系不过，会在发网络请求前直接返回 `_manifest_gate` 错误——绕过清单工具手拼参数也拦得住。不带结构化字段的纯正文派单不受硬门影响，但新派单应优先带结构化范围＋清单。
 - **回报格式（每次必报）**：runId、完整 sessionId、起止时间（北京时间）、终态、交付摘要（assistantText 要点，自己复核过）、归档状态（archived:true 或 archive_pending+原因）。
 
 ## 长任务跟进闭环（2026-11-09 LEE 定，治「说了会跟进却不跟进」）
@@ -116,7 +117,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 
 1. `list_workspaces` 按真实路径选已注册工作区；不凭调用方 cwd 猜。
 2. `list_capabilities` 取真实 provider/model/reasoningEffort/权限；不猜模型标识、不静默换提供商。扫描只看允许范围三平台（wb2api/antigravity/mq-gpt，其余 provider 忽略）。选型按首节自主选型口径（wb2api 的 flash / v4-pro 二选一为主），模型不可用就报告。
-3. 派发前先查同事项正会话：扫 pending 登记 + runs-ledger，有同事项未关闭 sessionId 就复用（见「同一事项沿用同一会话」节），不 fresh。派发参数：`workspace`、`task`（只给范围/路径/授权/验收，**不贴源码、diff、压缩包**，由 DSH 自己读）、`provider`、`model`、`reasoningEffort`、`openBrowser: false`、稳定 `idempotencyKey`、`authorizationBasis: "explicit-user-request"`（仅在用户明确要求调用 DSH 时）。新事项首轮才用 `sessionMode: "fresh"`；复用走 `reply_run` 或带 `sessionId` 的 start_\*。
+3. 派发前先查同事项正会话：扫 pending 登记 + runs-ledger，有同事项未关闭 sessionId 就复用（见「同一事项沿用同一会话」节），不 fresh。带结构化范围的派单先按「定式参数」的 manifest 校验生成清单并落盘，清单四组路径原样进派发参数，校验不过不派发。派发参数：`workspace`、`task`（只给范围/路径/授权/验收，**不贴源码、diff、压缩包**，由 DSH 自己读）、`provider`、`model`、`reasoningEffort`、`openBrowser: false`、稳定 `idempotencyKey`、`authorizationBasis: "explicit-user-request"`（仅在用户明确要求调用 DSH 时）。新事项首轮才用 `sessionMode: "fresh"`；复用走 `reply_run` 或带 `sessionId` 的 start_\*。
    - 只读任务走 `start_review`，并给 `reviewTargets`、`contextReadScope`、`excludedPaths`（凭据、.env、浏览器存储、生产数据等）。
    - 实施任务走 `start_run` + `permissionPreset: "workspace-write"` + `writeScope` 限定写入位置，或对正会话 `reply_run` 升档；任务文本声明：保留已有改动、无 commit/push/外部消息/凭据访问/破坏性清理授权。
 4. 记录返回的 `promptAdmission`、`runId`、完整 `sessionId`、`sessionReused`、`webUrl`，并立即写 pending 登记、挂 watcher 子代理与兜底 cron（见跟进闭环节）。不确定是否派发成功时用 `get_operation`/原幂等键核对，最多同键重试一次，不换新键重复派发。
