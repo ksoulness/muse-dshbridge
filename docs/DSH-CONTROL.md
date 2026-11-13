@@ -121,9 +121,9 @@ Relay 的 `RequestPolicy.authorize` 在源码层面锁死：请求来源必须�
 
 正向通道解决「Muse 派得出去」；反向解决「DSH 派得回来」。为什么不用「Muse 当 MCP 服务端让 DSH 直连」：Muse 的运行环境是受限容器、tailnet 只有出站客户端能力，接不了入站连接——反向必须用「DSH 入队 + 门铃，Muse 自取」的形态。
 
-### 7.1 DSH 侧入口：ask-muse 技能（是技能，不是插件）
+### 7.1 DSH 侧入口：muse-dshbridge 技能（是技能，不是插件）
 
-- DSH 侧装有一个名为 `ask-muse` 的**技能**（SKILL.md，位于 DSH 的技能目录 `agents-home\skills\ask-muse\`；v3.0.0 起默认走实时通道）。用户在 DSH 侧说「问 Muse / 让 Muse 查 / 给 Muse 派活」，DSH 即按技能投单：调入队脚本 `submit-task.mjs submit <type> <title> <body>`。
+- DSH 侧装有一个名为 `muse-dshbridge` 的**技能**（SKILL.md，位于 DSH 的技能目录 `agents-home\skills\muse-dshbridge\`；原名 ask-muse，2026-11-13 更名为与本项目同名，协议口径未随改名变动；v3.0.0 起默认走实时通道）。用户在 DSH 侧说「问 Muse / 让 Muse 查 / 给 Muse 派活」，DSH 即按技能投单：调入队脚本 `submit-task.mjs submit <type> <title> <body>`。
 - 入队脚本三步：①**机密扫描**（body 与 title 过凭据模式，命中即拒）；②任务文件**原子写入**队列 `pending/`（先写 `.tmp` 再改名，防读到半截）；③往 ntfy 的 `muse-doorbell` topic POST 一条**只带任务 id** 的门铃。发布须用 node:http 短连接（agent:false）走 tailnet 直连——经 tailscale serve 的 HTTPS 地址发布会因 Windows schannel 握手失败，fetch 还会被系统代理劫持。
 - 任务 id 格式沿用 GitHub 兜底协议：`<yyyymmdd>-<hhmmss>-<slug>-<4 位随机>`；回执四型 accept / edit / respond / ignore 的语义也与兜底协议一致。
 

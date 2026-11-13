@@ -98,7 +98,7 @@ MCP 端点是无状态的（每次 POST 新建 transport），客户端进程不
   → 写台账 + 按格式回报用户
 ```
 
-反方向（DSH → Muse）不在本篇展开：入口是 DSH 侧的 `ask-muse` **技能**，经队列 + ntfy 门铃唤醒 Muse、8443 `pickup` 取单，全文见 [docs/DSH-CONTROL.md](../docs/DSH-CONTROL.md) 第 7 节。两个方向共用同一套 8443 通道与互派专区，自 2026-11-13 起作为一套系统维护。
+反方向（DSH → Muse）不在本篇展开：入口是 DSH 侧的 `muse-dshbridge` **技能**，经队列 + ntfy 门铃唤醒 Muse、8443 `pickup` 取单，全文见 [docs/DSH-CONTROL.md](../docs/DSH-CONTROL.md) 第 7 节。两个方向共用同一套 8443 通道与互派专区，自 2026-11-13 起作为一套系统维护。
 
 要点：
 

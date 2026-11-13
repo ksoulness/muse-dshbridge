@@ -19,7 +19,7 @@
 | 2 | Windows 侧适配器已部署 | DSH 在运行、Relay 插件启用、本机 `:18081` 第二实例 + Serve `:8443` 已配（属用户/DSH 侧工程，本仓库只记录形态） |
 | 3 | **一对 OAuth token**（access 1h + refresh 30d） | 只能由用户在 Windows 侧签发后交给你，或用户在浏览器里走完授权把 token 对给你。存进 600 权限的 state 文件（格式见 `tools/dsh_client.py` 头注），**只记位置、不要把值写进任何文档/记忆** |
 | 4 | 客户端脚本 | 就用本仓库 `tools/dsh_client.py`（自带 token 自续、台账、空响应重试），不要自己重写 |
-| 5 | 反向通道的 Muse 侧组件 | 门铃守护进程（订阅自托管 ntfy 的 `muse-doorbell` + `muse-run-events` 两条流、落盘）+ 唤醒 hook（约 10 秒）+ 看门狗；DSH 侧需已装 `ask-muse` 技能与队列（属 DSH 侧工程，形态见 DSH-CONTROL.md 第 7 节） |
+| 5 | 反向通道的 Muse 侧组件 | 门铃守护进程（订阅自托管 ntfy 的 `muse-doorbell` + `muse-run-events` 两条流、落盘）+ 唤醒 hook（约 10 秒）+ 看门狗；DSH 侧需已装 `muse-dshbridge` 技能与队列（属 DSH 侧工程，形态见 DSH-CONTROL.md 第 7 节） |
 
 **三条铁律（违反过的都付出了丢单代价）：**
 
@@ -28,7 +28,7 @@
 - 派发后跟进靠**终态门铃**：relay 的 5 秒 poll loop 在 run 终态时发铃到 ntfy，守护进程落盘，watcher 等本地账本（`tools/watch_run_event.py`）取回终态；`wait_run(timeoutMs=30000)` 循环只作门铃失效时的降级。运行时长方差极大（22 秒 ~ 17 分钟都出现过），事后按 runId 取回可能被适配器层 `FORBIDDEN / expired` 拒掉——不要把「事后取回」当保障；实施类单子的验收必须附日志原文证据，执行方自报不算数
 - **反向单（DSH → 你）自动接受**：门铃通道来的单自行 accept 并执行、办完回 `report`，不再逐单等用户回执；但硬卡点（付款、凭据、删除/不可逆、新增程序/新任务线）仍先停下报用户批准；GitHub 私库兜底单不适用自动接受，仍逐单确认
 
-验收标准（做到才算学会）：按自选型在默认工作区派一个只读任务（回报写明选型）→ 终态门铃到达、取回终态 → 正文与事实对得上 → 整件事结束才归档并回读复核 `archived: true, running: false` → 台账里 started/terminal 两行齐全；反向再验一单：DSH 侧 ask-muse 投单 → 你被门铃唤醒 → pickup 取单执行 → report 回执落 done。
+验收标准（做到才算学会）：按自选型在默认工作区派一个只读任务（回报写明选型）→ 终态门铃到达、取回终态 → 正文与事实对得上 → 整件事结束才归档并回读复核 `archived: true, running: false` → 台账里 started/terminal 两行齐全；反向再验一单：DSH 侧 muse-dshbridge 技能投单 → 你被门铃唤醒 → pickup 取单执行 → report 回执落 done。
 
 ## 技能二：连接微信 —— 你需要先从用户那里拿到什么
 

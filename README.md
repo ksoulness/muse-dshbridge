@@ -3,7 +3,7 @@
 把云端的 **Meta Muse**（跑在云电脑上的个人 agent）接到用户自己的两个世界里：
 
 - **Muse → DSH 派活**：经 Tailscale 私有网络，远程调用用户 Windows 电脑上的 **DSH（DeepSeek Harness）**，在指定工作区里发起对话、执行任务、验收结果；
-- **DSH → Muse 派活**（2026-11-13 建成）：DSH 侧的 `ask-muse` 技能把任务入队并按响门铃，Muse 被唤醒后取单、自动执行、回执——两个 agent 自此**互相指派**，不再经 GitHub 中转、不再靠定时轮询跟进；
+- **DSH → Muse 派活**（2026-11-13 建成）：DSH 侧的 `muse-dshbridge` 技能把任务入队并按响门铃，Muse 被唤醒后取单、自动执行、回执——两个 agent 自此**互相指派**，不再经 GitHub 中转、不再靠定时轮询跟进；
 - **随身对话**：经腾讯官方 ClawBot 微信插件 + wx-bot 桥接，让用户在微信里直接和 Muse 聊天。
 
 一句话：**DSH 线是一套双向实时互派系统——正向是「Muse → tailnet → OAuth 适配器 → DSH Relay」派发 + 「relay 终态门铃 → ntfy → Muse」推送跟进；反向是「DSH 入队 + ntfy 门铃 → Muse 守护进程唤醒 → 经适配器 pickup 取单」；两个方向共用一个互派专区工作区 `E:\Code\muse`。微信线是「微信 → ClawBot 协议 → wx-bot 收件箱 → 唤醒 Muse」的消息通道。** 本仓库是这些链路的**项目记录 + 操作手册 + 技能文件**：正向 2026-10-20 实测打通，双向实时 2026-11-13 建成并四轮实测验收。
@@ -19,7 +19,7 @@
                  Windows 电脑 · DSH      终态铃        门铃        wx-bot（用户微信）
                    Relay MCP :3079     muse-run-events  muse-doorbell
                    互派专区 E:\Code\muse（队列 + 共享工作区）
-                   ask-muse 技能（DSH → Muse 的派活入口）
+                   muse-dshbridge 技能（DSH → Muse 的派活入口）
 ```
 
 ## 为什么需要这两条线
@@ -40,7 +40,7 @@
 - **验收闭环**：派发（长单先挂 pending 登记 + 铃驱动 watcher + 兜底 cron）→ 铃到取终态 → 读 `assistantText` 自行复核（**实施类单子必须附日志原文证据，自报结论不算数**——2026-11-13 四轮实测的教训，见下）→ 整件事结束才归档正会话并回读复核（`archived: true, running: false` 才算数）→ 按固定格式回报
 
 **DSH 线（反向：DSH → Muse，2026-11-13 建成）**
-- **入口是技能，不是插件**：DSH 侧装了一个名为 `ask-muse` 的**技能**（v3.0.0，位于 DSH 的技能目录）；用户在 DSH 侧说「问 Muse / 让 Muse 查 / 给 Muse 派活」，DSH 即走该技能投单
+- **入口是技能，不是插件**：DSH 侧装了一个名为 `muse-dshbridge` 的**技能**（v3.0.0，位于 DSH 的技能目录 `agents-home\skills\muse-dshbridge\`；2026-11-13 由原名 ask-muse 更名，与本项目同名同源）；用户在 DSH 侧说「问 Muse / 让 Muse 查 / 给 Muse 派活」，DSH 即走该技能投单
 - **入队 + 门铃**：入队脚本先做机密扫描，再把任务原子写入互派专区队列 `E:\Code\muse\queue\{pending,done}`，同时往 ntfy 的 `muse-doorbell` topic 发一条**只带任务 id** 的门铃（正文不走 ntfy，经 8443 取）
 - **取单 + 自动接受**：Muse 侧守护进程收到铃落盘，唤醒 hook 约 10 秒内叫醒主会话；Muse 经适配器的 `pickup` 工具取正文，**自行 accept 并执行**（2026-11-13 改定，不再逐单等用户回执），办完调 `report` 回执落 `done/`；硬卡点不自动——付款/支付、凭据、删除与不可逆改动、在任何机器上新增程序/新任务线/换用途，仍先报用户批准
 - **GitHub 私有收件箱降为兜底**：实时通道不可用（入队失败/适配器不通）或用户点名时才走 GitHub 私库投单，仍逐单确认门；同一 id 两边都出现只处理一次。门铃断档不丢件：ntfy 缓存 12 小时 + 队列在 DSH 侧常存
@@ -56,7 +56,7 @@
 
 1. Windows 侧：DSH 运行中（Relay 插件启用）；适配器起第二个实例监听本机 `:18081`（独立 OAuth 库），`tailscale serve` 把 tailnet 的 `:8443` 指给它
 2. 云端：客户端向 `:8443` 动态注册（DCR），所有者在本机浏览器走完 OAuth 授权（口令只在本机输），拿到 access + refresh 对
-3. 反向与门铃（Windows 侧）：适配器加三个本地工具 `pickup / report / status` + 建队列目录（落在互派专区工作区 `E:\Code\muse\queue`，该工作区先注册好）；relay 运行包里加终态门铃 poll 钩子（改前留备份）；DSH 侧装 `ask-muse` 技能（入队脚本 + 发门铃）
+3. 反向与门铃（Windows 侧）：适配器加三个本地工具 `pickup / report / status` + 建队列目录（落在互派专区工作区 `E:\Code\muse\queue`，该工作区先注册好）；relay 运行包里加终态门铃 poll 钩子（改前留备份）；DSH 侧装 `muse-dshbridge` 技能（入队脚本 + 发门铃）
 4. 云端：跑门铃守护进程（订阅自托管 ntfy 的 `muse-doorbell` 与 `muse-run-events` 两条流、落盘、断线带 `since` 补投）+ 唤醒 hook（约 10 秒）+ 守护进程看门狗
 5. 之后双向都走技能手册：`skills/dsh-relay-operation/SKILL.md` —— 把它交给 Muse，它就会按定式双向派活
 

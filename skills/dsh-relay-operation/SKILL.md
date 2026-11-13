@@ -135,7 +135,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 
 ## 反向通道（DSH→Muse，8443 pickup + ntfy 门铃，2026-11-13 第 2 轮建成）
 
-与 GitHub 收件箱并行的实时通道：DSH 用入队口投单到适配器队列（`E:\Code\muse\queue\{pending,done}`，2026-11-13 晚自适配器 state-tailnet 迁入互派专区；`E:\Code\muse` 已注册为 DSH 工作区，workspaceId `7357e936-cf7d-478f-8f58-ce2567493d87`、标题 muse，互派通道相关的派单/调研/报告默认以它为工作区），同时往 free-vps ntfy 的 topic `muse-doorbell` 发一条只带任务 id 的门铃。DSH 侧 `ask-muse` 技能 v3.0.0 起默认走此实时通道，GitHub 私库降为兜底（入队失败/适配器不通/LEE 点名才走，仍逐单确认门）。同一 id 两边都出现时只处理一次（先到为准、另一边标 done）。
+与 GitHub 收件箱并行的实时通道：DSH 用入队口投单到适配器队列（`E:\Code\muse\queue\{pending,done}`，2026-11-13 晚自适配器 state-tailnet 迁入互派专区；`E:\Code\muse` 已注册为 DSH 工作区，workspaceId `7357e936-cf7d-478f-8f58-ce2567493d87`、标题 muse，互派通道相关的派单/调研/报告默认以它为工作区），同时往 free-vps ntfy 的 topic `muse-doorbell` 发一条只带任务 id 的门铃。DSH 侧 `muse-dshbridge` 技能（原名 ask-muse，2026-11-13 更名为与项目同名）v3.0.0 起默认走此实时通道，GitHub 私库降为兜底（入队失败/适配器不通/LEE 点名才走，仍逐单确认门）。同一 id 两边都出现时只处理一次（先到为准、另一边标 done）。
 
 **Muse 侧组件**：
 
