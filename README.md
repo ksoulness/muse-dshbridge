@@ -129,7 +129,7 @@ docs/TROUBLESHOOTING.md    两条线的故障速查表
 skills/dsh-relay-operation/SKILL.md
                            交给 Muse 的 DSH 操作技能手册（定式版）
 skills/muse-dshbridge/SKILL.md
-                           DSH 侧的派活技能（v3.1.1，与 Muse 侧同源同版）：实时入队、门铃、结果回读、归档分工与接管口径、报告去向
+                           DSH 侧的派活技能（v3.1.2，与 Muse 侧同源同版）：实时入队、门铃、结果回读、归档分工与接管口径、报告去向、发单后挂回执等待
                            **公开仓为脱敏版**：tailnet 主机名与 ntfy 地址写作 `<tailnet>` / `<ntfy-host>`；本机部署版保留真值，两版除占位符外一致
 tools/dsh_client.py        DSH 客户端：token 自续 + 台账 + 长超时重试（带并发锁与 401 重读重试）
 tools/watch_run_event.py   铃驱动 watcher：等本地终态铃账本出现目标 run 才取回终态（现行跟进主力）

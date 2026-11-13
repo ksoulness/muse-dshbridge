@@ -2,7 +2,7 @@
 name: muse-dshbridge
 description: 当老大说「问 Muse」「让 Muse 查一下」「给 Muse 派活」「让 Muse 做 X」「Muse 帮我看下」这类话术，需要把一件事交给 Muse 处理时使用——本技能是 **muse-dshbridge 双向互派系统在 DSH 侧的入口**（与 GitHub 仓 ksoulness/muse-dshbridge 及 Muse 侧技能 dsh-relay-operation 同源同版；2026-11-13 由 ask-muse v3.0.0 更名而来，协议口径一字未改）。默认走**实时指派通道**（本地队列 + ntfy 门铃，Muse 被门铃实时唤醒、自动接受执行，无需 LEE 逐单确认；硬卡点除外）；入队脚本不可用时兜底走 GitHub 私有收件箱（该路仍要过 LEE 确认门）。本技能固化通道操作：入队、回报 task id、结果回读。触发词：问 Muse、让 Muse 查、给 Muse 派活、派给 Muse、Muse 帮我看、问下 Muse、让 Muse 判断。
 metadata:
-  version: "3.1.1"
+  version: "3.1.2"
   date: "2026-11-13"
   renamed_from: "ask-muse v3.0.0（2026-11-13 更名，协议不变）"
   family: "本机 DSH 专属（DSH⇄Muse 双向互派系统的 DSH 侧入口；DSH→Muse 双通道：实时队列为默认，GitHub 收件箱为兜底）"
@@ -157,3 +157,16 @@ cat outbox/<task-id>.result.md     # 先看 resolution / status，再读正文
 
 - 本文件在公开仓里是**脱敏版**：tailnet 主机名、ntfy 地址写成 `<tailnet>` / `<ntfy-host>` 占位符；本机部署版（`D:\Program Files\DSH\agents-home\skills\muse-dshbridge\SKILL.md`）保留真值。
 - 改动要两边同步：先改本机验证可用，再脱敏回推仓库；两版除占位符外必须一致。
+
+## 十一、发单后必须挂回执等待（2026-11-13 补，教训）
+
+- **问题**：Muse 的 `report` 只落 `queue/done/<id>.result.json`，**没有任何东西推给 DSH 侧**。发完单这一轮就结束，回执到了也没人知道——只能等 LEE 问一句「回了吗」。这是 DSH 侧自己的缺口，不是 Muse 的问题。
+- **规矩**：`submit-task.mjs` 入队成功（`doorbell_ok true`）后，**同一轮内必须挂一个后台等待**，落地即报；不许发完就收工。
+- 模板（后台 job，最长 15 分钟，落地即出结论；job 结束会自动叫醒本会话）：
+
+  ```bash
+  id=<单号>; for i in $(seq 1 90); do f="E:/Code/muse/queue/done/$id.result.json"; if [ -f "$f" ]; then PYTHONIOENCODING=utf-8 python -c "import json,io,sys;d=json.load(io.open(sys.argv[1],encoding='utf-8'));print(d['reported_at'],d['resolution'],d['status']);print(d['evidence'])" "$f"; exit 0; fi; sleep 10; done; echo "TIMEOUT-15min $id"
+  ```
+
+- 15 分钟没落地：用 `schedule_create` 再挂一次提醒（30 分钟），同时按兜底判定查 8443 探活与门铃（200 但无 pickup = Muse 侧没醒；门铃失败 = ntfy 侧问题）。
+- 这条不改通道、不加常驻程序或计划任务，纯会话内等待。
