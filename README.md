@@ -34,10 +34,10 @@
 
 **DSH 线（正向：Muse → DSH）**
 - **下令定式（2026-11-13 改定：确认门取消、选型自主）**：用户说「指派 DSH 去完成 `<任务>`」，Muse 在 wb2api 的 DeepSeek V4.1 Flash 与 V4 Pro 之间按复杂度自选模型与推理档位、**直接派发**，并在回报里写明本次选型；默认工作区 `E:\Code\muse`（互派专区），用户点名其他工作区时按点名走。平台范围仍只许三家（wb2api / antigravity / mq-gpt），其中 mq-gpt 全部模型与 antigravity 的 Opus 仅用户强制指定才可用、绝不自主选；任务前缀 `muse指派-`、同一事项沿用同一会话、只读走 `start_review`、稳定幂等键。旧口径「派发前先过确认门、等用户回继续」已于 2026-11-13 废止。见 [docs/DSH-CONTROL.md](docs/DSH-CONTROL.md)
-- **终态门铃（2026-11-13 建成，跟进从拉改推）**：relay 内加一个 5 秒 poll loop，run 到终态（succeeded / incomplete / failed / cancelled）即往自托管 ntfy 的 `muse-run-events` topic 发一条铃（runId / sessionId / 状态）；放行条件是 serviceId 白名单或任务以 `muse指派` 开头。Muse 侧守护进程订阅落盘，watcher 改等本地账本（`tools/watch_run_event.py`，零远程轮询），铃到才取一次终态正文；每单 5 分钟兜底 cron 保留作最后一道保险。实测新鲜单端到端 6~8 秒（DSH 侧发铃 <2 秒，其余是 ntfy 送达）
+- **终态门铃（2026-11-13 建成，跟进从拉改推）**：relay 内加一个 5 秒 poll loop，run 到终态（succeeded / incomplete / failed / cancelled）即往自托管 ntfy 的 `muse-run-events` topic 发一条铃（runId / sessionId / 状态）；放行条件是 serviceId 白名单或任务以 `muse指派` 开头。Muse 侧守护进程订阅落盘，watcher 改等本地账本（`tools/watch_run_event.py`，零远程轮询），铃到才取一次终态正文；跟进只靠 pending 登记 + 铃驱动 watcher 两件套（per-task 兜底 cron 已于 2026-11-13 晚取消不再建，门铃已稳定）。实测新鲜单端到端 6~8 秒（DSH 侧发铃 <2 秒，其余是 ntfy 送达）
 - **长任务可靠姿势**：终态正文立即落盘，run 台账（runId / sessionId / 幂等键 / 起止 / 正文）自动记入本地 ledger；`wait_run` 轮询只作门铃失效时的降级备用
 - **token 自续**：access 过期自动用 refresh 轮换，新 token 对原子落盘（600 权限）；旧 refresh 重放会吊销整族，所以永远先落盘再干活
-- **验收闭环**：派发（长单先挂 pending 登记 + 铃驱动 watcher + 兜底 cron）→ 铃到取终态 → 读 `assistantText` 自行复核（**实施类单子必须附日志原文证据，自报结论不算数**——2026-11-13 四轮实测的教训，见下）→ 整件事结束才归档正会话并回读复核（`archived: true, running: false` 才算数）→ 按固定格式回报
+- **验收闭环**：派发（长单先挂 pending 登记 + 铃驱动 watcher 两件套）→ 铃到取终态 → 读 `assistantText` 自行复核（**实施类单子必须附日志原文证据，自报结论不算数**——2026-11-13 四轮实测的教训，见下）→ 整件事结束才归档正会话并回读复核（`archived: true, running: false` 才算数）→ 按固定格式回报
 
 **DSH 线（反向：DSH → Muse，2026-11-13 建成）**
 - **入口是技能，不是插件**：DSH 侧装了一个名为 `muse-dshbridge` 的**技能**（v3.0.0，位于 DSH 的技能目录 `agents-home\skills\muse-dshbridge\`；2026-11-13 由原名 ask-muse 更名，与本项目同名同源）；用户在 DSH 侧说「问 Muse / 让 Muse 查 / 给 Muse 派活」，DSH 即走该技能投单

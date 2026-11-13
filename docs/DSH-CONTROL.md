@@ -79,8 +79,8 @@ Relay 的 `RequestPolicy.authorize` 在源码层面锁死：请求来源必须�
   → 查同事项正会话（pending 登记 + 台账）：有未关闭 sessionId 就复用，不 fresh
   → start_review / start_run（新事项首轮）或 reply_run（同事项续接）
        （响应里的 runId/operationId/sessionId 立即落盘）
-  → 长单三件套：pending 登记 + 铃驱动 watcher 子代理（tools/watch_run_event.py，deadline 制）
-       + per-task 5 分钟兜底 cron —— 没挂机制不许说「会跟进」
+  → 长单两件套：pending 登记 + 铃驱动 watcher 子代理（tools/watch_run_event.py，deadline 制）
+       —— 没挂机制不许说「会跟进」（2026-11-13 晚定：per-task 兜底 cron 不再建，门铃已稳定）
   → relay 终态门铃到达本地账本（muse-run-events → 守护进程落盘），watcher 取回终态
        succeeded | failed | cancelled | timeout | orphaned
        （门铃失效才降级：dsh_watch.py 循环 wait_run(timeoutMs=30000)）

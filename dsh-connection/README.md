@@ -90,7 +90,7 @@ MCP 端点是无状态的（每次 POST 新建 transport），客户端进程不
         默认工作区 E:\Code\muse（互派专区），点名其他工作区按点名走
   → doctor → list_workspaces（复核）→ list_capabilities（确认选型）
   → start_review / start_run（新事项首轮）或 reply_run（同事项续接同一会话）
-       （响应里的 runId/operationId/sessionId 立即落盘；长单挂铃驱动 watcher + 兜底 cron）
+       （响应里的 runId/operationId/sessionId 立即落盘；长单挂铃驱动 watcher）
   → 终态门铃到达本地账本后取回终态（watch_run_event.py）；门铃失效才降级 wait_run 循环
        succeeded | failed | cancelled | timeout | orphaned
   → 读 assistantText 自行复核（DSH 的自述 ≠ 验收通过）
