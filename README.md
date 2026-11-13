@@ -79,6 +79,10 @@
 `docs/` 下的原有方法文档（`DSH-CONTROL.md`、`WECHAT-BRIDGE.md`、`TROUBLESHOOTING.md`
 等）仍保留，被这三个文件夹引用，不重复写。
 
+## 两边是什么：技能，不是插件
+
+给对方派活的入口两边都是**技能**：Muse 侧是技能 `dsh-relay-operation`（操作手册＋脚本），DSH 侧是技能 `muse-dshbridge`（原 ask-muse，2026-11-13 更名对齐本项目）。全图里唯一的**插件**是 DSH 内部的 Relay——任务执行引擎的底座，与两个入口技能不是一回事；其余组件是脚本、独立程序（8443 适配器、ntfy）、常驻守护与平台 hook。两条通道的组件全图与时序见 [docs/INTEROP.md](docs/INTEROP.md)。
+
 ## 实测记录（2026-11-13）
 
 - **双向实时互派建成**：DSH → Muse 联测单入队 → 守护进程约 6 秒落盘 → 唤醒 → pickup 取单 → report 回执 → 队列归零，全程秒级，不再经 GitHub 中转
@@ -122,6 +126,7 @@ skills/dsh-relay-operation/SKILL.md
                            交给 Muse 的 DSH 操作技能手册（定式版）
 tools/dsh_client.py        DSH 客户端：token 自续 + 台账 + 长超时重试（带并发锁与 401 重读重试）
 tools/watch_run_event.py   铃驱动 watcher：等本地终态铃账本出现目标 run 才取回终态（现行跟进主力）
+tools/sweep_archive.py     归档清扫：新派单前归档我方已终态、事项已关闭的旧会话，列表只留当前事项
 tools/dsh_watch.py         轮询版 watcher：deadline 制 wait_run 循环，门铃失效时的降级备用
 ```
 
