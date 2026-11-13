@@ -2,11 +2,12 @@
 name: muse-dshbridge
 description: 当老大说「问 Muse」「让 Muse 查一下」「给 Muse 派活」「让 Muse 做 X」「Muse 帮我看下」这类话术，需要把一件事交给 Muse 处理时使用——本技能是 **muse-dshbridge 双向互派系统在 DSH 侧的入口**（与 GitHub 仓 ksoulness/muse-dshbridge 及 Muse 侧技能 dsh-relay-operation 同源同版；2026-11-13 由 ask-muse v3.0.0 更名而来，协议口径一字未改）。默认走**实时指派通道**（本地队列 + ntfy 门铃，Muse 被门铃实时唤醒、自动接受执行，无需 LEE 逐单确认；硬卡点除外）；入队脚本不可用时兜底走 GitHub 私有收件箱（该路仍要过 LEE 确认门）。本技能固化通道操作：入队、回报 task id、结果回读。触发词：问 Muse、让 Muse 查、给 Muse 派活、派给 Muse、Muse 帮我看、问下 Muse、让 Muse 判断。
 metadata:
-  version: "3.1.0"
+  version: "3.1.1"
   date: "2026-11-13"
   renamed_from: "ask-muse v3.0.0（2026-11-13 更名，协议不变）"
   family: "本机 DSH 专属（DSH⇄Muse 双向互派系统的 DSH 侧入口；DSH→Muse 双通道：实时队列为默认，GitHub 收件箱为兜底）"
   same_source: "GitHub 仓 ksoulness/muse-dshbridge + Muse 侧技能 dsh-relay-operation"
+  redacted: "公开仓脱敏版：tailnet 主机名与 ntfy 地址为占位符，本机部署版保留真值"
 ---
 
 # muse-dshbridge（把活派给 Muse —— DSH 侧入口）
@@ -40,7 +41,7 @@ node "E:/Code/Tools/DSH-Remote-MCP/remote/scripts/submit-task.mjs" \
 
 - `--kind`：`task`（要它动手/查并回执）或 `question`（只要一句判断）。
 - 可选 `--task-file body.md` 从文件读正文；`--thread <id>` 串多轮；`--blocked-by <id>` 串依赖；`--priority urgent`。
-- 脚本做的事（一步到位）：生成 id（北京时间 `YYYYMMDD-HHMMSS-<slug>-<4hex>`）→ 疑似机密扫描（命中即拒写）→ 原子写 `pending/<id>.json` → POST 门铃 `http://100.72.237.38:2586/muse-doorbell`（只带 id，正文走 8443 pickup）。门铃失败**不回滚入队**，只把 `doorbell_error` 记进条目。
+- 脚本做的事（一步到位）：生成 id（北京时间 `YYYYMMDD-HHMMSS-<slug>-<4hex>`）→ 疑似机密扫描（命中即拒写）→ 原子写 `pending/<id>.json` → POST 门铃 `http://<ntfy-host>:2586/muse-doorbell`（只带 id，正文走 8443 pickup）。门铃失败**不回滚入队**，只把 `doorbell_error` 记进条目。
 - 脚本会打印：`enqueued <id>` / `enqueued_at <ISO+08:00>` / `doorbell_ok <bool> http_status <码>`。
 
 **回报口径（实时路）**：给老大 **task id** + 说明「Muse 会被门铃实时唤醒、自动接受执行，结果经 report 落到 `E:\Code\muse\queue\done\<id>.result.json`，可回读核对」；顺带报入队时间、门铃 POST 时间与 HTTP 状态。
@@ -60,7 +61,7 @@ Muse 侧口径（与 Muse 侧技能 `dsh-relay-operation`、仓库 `ksoulness/mu
 
 切换条件（满足任一即切，切了就按这条路的规矩走）：
 1. `submit-task.mjs` 报错退出（非零码、`ERROR: ...`、Node 缺失）；
-2. 门铃一直失败且 `https://win.tailbc7c29.ts.net:8443/health` 不通（8443/适配器不可用）；
+2. 门铃一直失败且 `https://win.<tailnet>.ts.net:8443/health` 不通（8443/适配器不可用）；
 3. 老大明确要求走 GitHub 确认门那条路。
 
 ```bash
@@ -145,3 +146,14 @@ cat outbox/<task-id>.result.md     # 先看 resolution / status，再读正文
 - Muse → DSH：20:46:26 派发 → 20:46:46 succeeded → 终态门铃 20:46:48 到 Muse 账本，单次 **27.1 秒**。
 - 另一条：那次 run 里的 DSH agent 自发回派单 `20261113-204411-mutual-test-return-e342`，20:44:11 → Muse 回执 20:45:34（**83 秒**）。注意：run 里的 agent 会自己往 `queue/pending` 写单。
 - 归档复核：两个 Muse 派出的会话在本机 fleet 回读均 `archived:true / running:false`，分工真实生效。
+
+## 九、报告去向（2026-11-13 20:50 LEE 定，对齐 Muse 侧）
+
+- **Muse 侧**：Muse⇄DSH 互相指派的派发回报与终态完成报告，统一发到专用旁聊（Muse 内部对话，id 不入库），不再发主聊天；细节以仓库 `skills/dsh-relay-operation/SKILL.md` 的「报告去向」节为准。
+- **DSH 侧**：老大的指令在哪下、回报就回哪（通常是本对话）；不往旁聊贴报告，公开仓不写 chat id 明文。
+- **跨侧派单**：pending 登记里写清 `origin_chat_id`，终态回执才会落回发起处。
+
+## 十、本仓库版与本机版的关系
+
+- 本文件在公开仓里是**脱敏版**：tailnet 主机名、ntfy 地址写成 `<tailnet>` / `<ntfy-host>` 占位符；本机部署版（`D:\Program Files\DSH\agents-home\skills\muse-dshbridge\SKILL.md`）保留真值。
+- 改动要两边同步：先改本机验证可用，再脱敏回推仓库；两版除占位符外必须一致。
