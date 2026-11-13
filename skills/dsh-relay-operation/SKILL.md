@@ -126,7 +126,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
    - **长耗时教训（2026-10-20 实测）**：该机一个只读 run 实测跑了 17 分 33 秒（22:30:58→22:48:31）才 succeeded，且 start 调用的 HTTP 响应本身也迟迟不回。所有调用必须用长超时（start_* 与轮询单次 ≥240 秒、总轮询窗口 ≥20 分钟）；30–90 秒短超时必然读到空响应并误判失败。**响应丢失 ≠ 派发失败**：start 的响应没回来时，请求可能已在服务端落地，先用同一 idempotencyKey 经 get_operation/reconcile_operation 或按 runId/会话列表核对，确认不存在才允许同键重试，绝不换新键重派。现成客户端 `dsh_client.py` 已内置长超时与空响应重试。
    - **句柄过期教训（2026-10-20 夜实测 + GPT 侧源码核查修正）**：经 8443 派发的 run，事后 get_run/get_run_summary/wait_run 可能回 `-32003 FORBIDDEN / reason: expired`，**run 在 DSH 里正常跑完也读不回 assistantText**。GPT 侧查 Relay 0.2.17 源码证实：该错误码**不是 Relay 的**（Relay 无 -32003/FORBIDDEN；其 runs/operations 会落盘到 `%LOCALAPPDATA%\dsh-relay\state.json` 并在重启时恢复、无 TTL/删除逻辑；Relay 的 expired 仅指权限回滚租约、默认 24h）——错误来自生产 8443 适配器层（真实代码在 `E:\Code\Tools\DSH-Remote-MCP`，**未注册为 DSH 工作区**、外部只读不到，其确切失效条件未定论，勿再猜「句柄只存内存」）。可靠姿势（GPT 侧验证 + 其源码建议）：① start 前生成 idempotencyKey 并连同响应里的 runId/operationId/sessionId **立即落盘**（`dsh_client.py` 自动记 `hidden_files/runs-ledger.jsonl`）；② 用 `wait_run(timeoutMs: 30000)` 循环等终态（服务端单次上限就是 30 秒，传更大无用；MCP 端点无状态、不需常驻连接，但必须指向同一 Relay authority/state）；③ 终态立刻把 assistantText 落盘，不把「事后靠 runId 取回」当唯一保障；④ start 响应丢失用同一 idempotencyKey 重放，再用 get_operation/list_runs 对账。实例：md 计数单（runId 22e3cb35-bc06-45da-8ace-a79c23a1043a、session-42f7a707-d1bf-4385-9a2d-a9483043e762）即因此未能自取其回复，最终答案由 GPT 侧另行实测给出（主机NAS 根目录 .md 共 2 个）。
 6. 读终态 `assistantText` 自行复核（只读结论核对文件/行证据；实施任务对照实际改动与测试结果）。DSH 的自述不等于验收通过。
-7. 收尾：仅当**整个事项**已结束、正会话的终态结果已消费、无活动 run、用户未要求保留时，才 `archive_terminal_session { session_id: <正会话完整 session-UUID>, confirm: true }` 并关闭 pending 登记；`archived: true` 才算成功，否则记 `archive_pending`。归档后必须再用 `list_workspace_sessions` 回读该 sessionId 复核 `archived: true, running: false`（2026-11-09 fleet-relay 两会话即如此验过），只凭归档调用的返回值不算验完。事项未结束不归档（后续轮次还要复用）。不按标题/日期批量归档，不动用户自己的会话。
+7. 收尾：仅当**整个事项**已结束、正会话的终态结果已消费、无活动 run、用户未要求保留时，才 `archive_terminal_session { session_id: <正会话完整 session-UUID>, confirm: true }` 并关闭 pending 登记；`archived: true` 才算成功，否则记 `archive_pending`。归档后必须再用 `list_workspace_sessions` 回读该 sessionId 复核 `archived: true, running: false`（2026-11-09 fleet-relay 两会话即如此验过），只凭归档调用的返回值不算验完。事项未结束不归档（后续轮次还要复用）。不按标题/日期批量归档，不动用户自己的会话。**归档分工（2026-11-13 LEE 定）**：谁派的单谁归自己那侧的会话——你派给 DSH 的 run 由你自己归档并回读复核；DSH 派给你的一单里、DSH 侧为此新开的对话由 DSH 自己归档。两侧都不代对方归档。
 
 ## 安全边界
 
@@ -137,6 +137,8 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 ## 反向通道（DSH→Muse，8443 pickup + ntfy 门铃，2026-11-13 第 2 轮建成）
 
 与 GitHub 收件箱并行的实时通道：DSH 用入队口投单到适配器队列（`E:\Code\muse\queue\{pending,done}`，2026-11-13 晚自适配器 state-tailnet 迁入互派专区；`E:\Code\muse` 已注册为 DSH 工作区，workspaceId `7357e936-cf7d-478f-8f58-ce2567493d87`、标题 muse，互派通道相关的派单/调研/报告默认以它为工作区），同时往 free-vps ntfy 的 topic `muse-doorbell` 发一条只带任务 id 的门铃。DSH 侧 `muse-dshbridge` 技能（原名 ask-muse，2026-11-13 更名为与项目同名）v3.0.0 起默认走此实时通道，GitHub 私库降为兜底（入队失败/适配器不通/LEE 点名才走，仍逐单确认门）。同一 id 两边都出现时只处理一次（先到为准、另一边标 done）。
+
+**DSH 侧联络人（2026-11-13 20:35 起）**：DSH 这头的收发、回报与车道守夜由「**Muse 联络**」bot 负责，工作区 `E:\Code\muse`。你要它做事，走 8443 的 `start_run` / `start_review`（工作区默认 `E:\Code\muse`），标题前缀「**致 Muse 联络：**」，正文写清要问什么、要什么证据；终态门铃放行仍需 task 以 `muse指派` 开头或 serviceId 在白名单。两类接管的区别（系统接管 vs Bot 接管）、两边联系定式见仓库 `docs/TAKEOVER.md`。
 
 **Muse 侧组件**：
 
@@ -154,3 +156,10 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 6. 队列深度与最老条目年龄可调 `status` 查；门铃断档不丢件——ntfy 缓存 12 小时 + 队列在 DSH 侧常存，最坏退回 git 兜底。
 
 延迟口径（实测基线）：发布→守护进程落盘约 1 秒（2026-11-13 自测）；唤醒 hook 周期 10 秒；端到端目标 10–35 秒到 LEE 眼前。
+
+## 双向互派实测基线（2026-11-13 20:42–20:47 首测，两边都过）
+
+- **DSH → Muse**：入队 20:42:46 → `report` 回执 20:47:35，合计 4 分 49 秒（含 Muse 侧两次派 run）。
+- **Muse → DSH**：20:46:26 `start_review` 派发 → 20:46:46 succeeded → 终态门铃 20:46:48 落到本地 `run_events.jsonl`，单次 **27.1 秒**。
+- **附带一条**：那次 run 里的 DSH agent 自发回派单 `20261113-204411-mutual-test-return-e342`，20:44:11 → Muse 20:45:34 回执（**83 秒**）。注意 run 里的 agent 会自己往 `queue/pending` 写单——不希望它自主派活就在 run 的正文里写明禁止。
+- **归档复核**：两个 Muse 派出的会话在 DSH 侧 fleet 回读均 `archived: true / running: false`，归档分工真实生效。

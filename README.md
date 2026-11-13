@@ -86,6 +86,7 @@
 ## 实测记录（2026-11-13）
 
 - **双向实时互派建成**：DSH → Muse 联测单入队 → 守护进程约 6 秒落盘 → 唤醒 → pickup 取单 → report 回执 → 队列归零，全程秒级，不再经 GitHub 中转
+- **双向互派首测（2026-11-13 20:42–20:47，两条链路各跑一趟）**：Muse 派 run 到 DSH 单次 27.1 秒（派发→终态门铃落账本）；DSH 反向单 4 分 49 秒闭环（含 Muse 两次派 run）；期间 run 里的 DSH agent 自发回派一单、83 秒闭环。**归档分工经实测生效**：两个 Muse 派出的会话在 DSH 侧回读均 `archived:true / running:false`。两边的技能文件本次一并入库（`skills/dsh-relay-operation` + `skills/muse-dshbridge` v3.1.0）
 - **DSH 侧 Bot 级接管（2026-11-13 20:35）**：DSH 侧的收发、回报与车道守夜由「**Muse 联络**」bot 负责，工作区 `E:\Code\muse`；系统层组件（8443 适配器 / serve 映射 / 看门狗 / 队列 / 门铃钩子）未变。两类接管的区别、Muse 侧接管注意、**归档分工**与两边联系定式见 [docs/TAKEOVER.md](docs/TAKEOVER.md)
 - **互派专区归一**：`E:\Code\muse` 建成并注册为 DSH 工作区（标题 muse），队列、回执、调研报告都归一处；正向默认工作区同步改到这里。自此正反两向是同一套系统、同一份记录，不再分开维护
 - **终态门铃四轮才通**：第 1 轮把铃挂在宿主的事件流路径上——该路径的前置开关 `supportsEventStreams()` 在 DSH 宿主里恒为 false，钩子是死代码，真单全漏；第 2 轮自报的根因（relay 从未重启）被日志证伪（当日实际重启多次）；第 3 轮改 5 秒 poll loop 并定位真根因；第 4 轮换另一个模型（Flash）独立调取 relay 侧日志原文交叉核验，确认 FIRE 在终态后约 0.3 秒、POST 约 1 秒内完成。教训：**执行方的自报根因不可信，验收要一手日志**
@@ -127,6 +128,8 @@ docs/WECHAT-SETUP-PROMPT.md
 docs/TROUBLESHOOTING.md    两条线的故障速查表
 skills/dsh-relay-operation/SKILL.md
                            交给 Muse 的 DSH 操作技能手册（定式版）
+skills/muse-dshbridge/SKILL.md
+                           DSH 侧的派活技能（v3.1.0，与 Muse 侧同源同版）：实时入队、门铃、结果回读、归档分工与接管口径
 tools/dsh_client.py        DSH 客户端：token 自续 + 台账 + 长超时重试（带并发锁与 401 重读重试）
 tools/watch_run_event.py   铃驱动 watcher：等本地终态铃账本出现目标 run 才取回终态（现行跟进主力）
 tools/sweep_archive.py     归档清扫：新派单前归档我方已终态、事项已关闭的旧会话，列表只留当前事项
