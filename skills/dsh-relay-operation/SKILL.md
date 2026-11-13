@@ -143,7 +143,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 **Muse 侧组件**：
 
 - 订阅守护进程 `~/workspace/dsh-doorbell/daemon.py`（仅出站订阅 `<ntfy-host>:2586/muse-doorbell/json` 流、断线带 `since` 补投、单实例 flock），收到铃落 `state/inbox.jsonl`；hook `dsh-doorbell-watchdog`（60 秒）保活，拉起失败才唤醒告警。
-- 唤醒 hook `dsh-doorbell-inbox`（10 秒，delivery 主聊天）：脚本 `~/hooks/scripts/dsh-doorbell-inbox.sh` 扫账本，检出先 mark woken 再唤醒；账本工具 `~/workspace/dsh-doorbell/check.py`（scan/mark，状态 new→woken→notified→done；woken 超 15 分钟未推进会兜底重唤醒一次）。
+- 唤醒 hook `dsh-doorbell-inbox`（10 秒，delivery 为 DSH-MUSE-bridge 专用旁聊，见下节「报告去向」）：脚本 `~/hooks/scripts/dsh-doorbell-inbox.sh` 扫账本，检出先 mark woken 再唤醒；账本工具 `~/workspace/dsh-doorbell/check.py`（scan/mark，状态 new→woken→notified→done；woken 超 15 分钟未推进会兜底重唤醒一次）。
 - `dsh_client.py` 已加 token 锁内重读 + flock 串行 refresh、401 重读重试（2026-11-13），多进程并发调 8443 不再怕轮换撞车。
 
 **被唤醒后的处理协议（2026-11-13 17:38 LEE 改定：门铃单自动接受，不再逐单等回执）**：
@@ -156,6 +156,12 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 6. 队列深度与最老条目年龄可调 `status` 查；门铃断档不丢件——ntfy 缓存 12 小时 + 队列在 DSH 侧常存，最坏退回 git 兜底。
 
 延迟口径（实测基线）：发布→守护进程落盘约 1 秒（2026-11-13 自测）；唤醒 hook 周期 10 秒；端到端目标 10–35 秒到 LEE 眼前。
+
+## 报告去向（2026-11-13 20:50 LEE 定）
+
+- 专用对话：Muse 侧旁聊「DSH-MUSE-bridge 任务 派发 报告 群」（Muse 内部对话，id 不入库）是 Muse⇄DSH 互相指派的派发与完成报告群。Muse→DSH 的派发回报与终态完成报告、DSH→Muse 的收单汇报与执行结果，一律发到该旁聊，**不再发主聊天**。
+- 三个 DSH hook 的 delivery 已改到该旁聊：`dsh-doorbell-inbox`（10 秒）、`dsh-inbox-watch`（GitHub 兜底收件箱，5 分钟）、`dsh-doorbell-watchdog`（60 秒，门铃守护告警）。
+- 新派单写 pending 登记时，`origin_chat_id` 默认写该旁聊 id，使铃驱动 watcher 的终态回执落回该旁聊；LEE 在别处下令派 DSH 时，派发与完成报告仍归该旁聊（下令处至多留一句已转该群的指路，不在主聊天展开报告）。
 
 ## 双向互派实测基线（2026-11-13 20:42–20:47 首测，两边都过）
 
