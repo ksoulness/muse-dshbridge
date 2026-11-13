@@ -7,7 +7,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 
 ## 用户下令方式与定式（2026-11-09 LEE 改版，最重要，先读这节）
 
-用户通常这样下令：「指派 DSH 去完成 XX」「让 DSH 在 **量化** 看下 XX」——即 **任务**（工作区/模型没点名就走下面的默认），按定式补齐，但**派发前必须先过确认门**（见下），不要直接派。
+用户通常这样下令：「指派 DSH 去完成 XX」「让 DSH 在 **量化** 看下 XX」——即 **任务**（工作区/模型没点名就走下面的默认），按定式补齐后**直接派发**（2026-11-13 起确认门取消，见下），派完在回报里写明本次选型。
 
 ### 允许的模型平台范围（2026-11-09 LEE 限定，硬范围）
 
@@ -17,40 +17,32 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 |---|---|---|
 | wb2api | `wb2api-nas` | 可自主选型（见下），默认平台 |
 | antigravity | `antigravity` | Gemini 两个可自主选型；Opus 三个属「仅指定可用」（见下） |
-| mq-gpt | 待确认映射：暂按 `magpie-responses`（其模型全是 `codex/gpt-*`，是清单里唯一的纯 GPT 平台；映射未经 LEE 确认前，在确认门里注明这一理解） | 「仅指定可用」（见下） |
+| mq-gpt | 待确认映射：暂按 `magpie-responses`（其模型全是 `codex/gpt-*`，是清单里唯一的纯 GPT 平台；映射未经 LEE 确认，用前在回报里注明这一理解） | 「仅指定可用」（见下） |
 
-**仅 LEE 强制指定才可用（2026-11-09 LEE 定）**：mq-gpt 的全部模型，以及 antigravity 的 `claude-opus-5-5-low` / `-medium` / `-high`。这些模型**能用，但助手绝不推荐、绝不自主选、选型和异议清单里也不主动列**；只有 LEE 在当次任务里明确点名（如「用 mq-gpt」「用 opus」）才进确认门并使用。
+**仅 LEE 强制指定才可用（2026-11-09 LEE 定）**：mq-gpt 的全部模型，以及 antigravity 的 `claude-opus-5-5-low` / `-medium` / `-high`。这些模型**能用，但助手绝不推荐、绝不自主选、选型和异议清单里也不主动列**；只有 LEE 在当次任务里明确点名（如「用 mq-gpt」「用 opus」）才可使用。
 
 新平台只有 LEE 明说加入才扩围。某模型不可用就如实报告，在允许范围内换或停，**不静默换到范围外 provider/model**。
 
 **wb2api 全模型**（2026-11-09 实查）：`cn:deepseek-v4-pro`、`cn:deepseek-v4.1-flash`（x0.11）、`cn:hy3`（x0.00）、`cn:hy4free`、`cn:glm-5.3-flash`（x0.06）、`cn:space-bunny`（x0.03）、`cn:minimax-m3.1-flash`。
 **antigravity 全模型**：可推荐的只有 `gemini-4-argon`、`gemini-3.8-flash`；`claude-opus-5-5-low` / `-medium` / `-high` 仅指定可用。
 
-### 默认值与选型（2026-11-10 LEE 定版：默认 flash/high + 按复杂度分层建议，不取消分层）
+### 默认值与选型（2026-11-13 LEE 改定：双模型自选、确认门取消）
 
-- **默认模型（无特别建议时的基准）**：provider `wb2api-nas`、model `cn:deepseek-v4.1-flash`（显示名 DeepSeek V4.1 Flash）、`reasoningEffort: "high"`。LEE 定默认显式传 high（统一好记），不走省略——省略时走上游默认，但 flash 条目无 defaultEffort 字段、具体档位不可知。
-- **按复杂度分层保留，但走建议制（2026-11-10 LEE 纠正：分层不取消）**：Muse 先按任务复杂度判档，在**确认门里把推荐的模型+档位连同理由一起报给 LEE**，等 LEE 点头（回「继续」）才按推荐派；LEE 不点头就回默认 flash/high 派。分层是「建议」不是自主换——不许绕过确认门自行换模型：
-  - 简单/常规（只读核对、列目录、查状态、格式化、小改动）→ 推荐 flash 本身（图快用 `low`、稳妥用默认 `high`）或更轻的 wb2api 轻模型（如 `cn:hy3`）。
-  - 标准/复杂（多文件实施、架构讨论、疑难排查、长推理）→ 推荐 `cn:deepseek-v4-pro`（`medium`；最难的 quality-first 任务升 `high` / `max`）。
-  - 需要换个家族的视角（复核另一模型的结论、长上下文梳理、Gemini 更擅长的审读类）→ 推荐 antigravity `gemini-4-argon` 或 `gemini-3.8-flash`。
-  - **不推荐 opus、不推荐 mq-gpt**（仅指定可用，见上）。
+- **模型调色板**：默认只在 wb2api 两个 DeepSeek 里选——`cn:deepseek-v4.1-flash` 与 `cn:deepseek-v4-pro`。**由 Muse 按任务复杂度自己评估选哪个、用什么 reasoningEffort，选完直接派，不再事前请示**；派发回报里写明选型与一句理由即可。变动等 LEE 另行通知。
+- **分层参考（自主选型用）**：
+  - 简单/常规（只读核对、列目录、查状态、格式化、小改动）→ flash（图快 `low`、稳妥 `high`）。
+  - 标准/复杂（多文件实施、架构讨论、疑难排查、长推理）→ v4-pro（`medium`；最难的 quality-first 任务升 `high` / `max`）。
+  - 需要换个家族的视角（复核另一模型的结论、长上下文梳理、Gemini 更擅长的审读类）→ 仍可自主选 antigravity `gemini-4-argon` 或 `gemini-3.8-flash`。
+  - **opus 与 mq-gpt 仍是仅指定可用**（见上节硬范围，不因确认门取消而变）：LEE 当次点名才用。
 - **档位必须按模型各查各的——有些模型没有 medium（硬规矩，2026-11-10 LEE 提醒 + 实查定版）**：reasoningEffort 的合法取值**逐模型不同、不可套用别家的**，派发前必须按所选模型在 `list_capabilities` 里的那一条选，清单变了以现查为准。已实查的各模型档位（2026-11-09/10）：
   - `cn:deepseek-v4.1-flash`：只有 `low` / `high` / `max`——**没有 medium、没有 off（关闭推理）**，且无 defaultEffort 字段；同组其他模型都有 off，唯独它没有，不是 relay 漏传，是上游条目本身就这样；给它传 medium/off 必报 model-unavailable（纯枚举拒绝，relay 本身没毛病）。
   - `cn:deepseek-v4-pro`、`cn:hy3`、`cn:hy4free`、`cn:glm-5.3-flash`、`cn:space-bunny`、`cn:minimax-m3.1-flash`：`off` / `low` / `medium` / `high` / `max`（这些才有 medium）。
   - antigravity `gemini-4-argon`、`gemini-3.8-flash`：只有 `low` / `medium` / `high`——没有 max、没有 off，别给它们传 max。
-- **默认工作区**：`E:\Code\Ops`（标题 Ops，workspaceId `3fec5dd9-1f19-4404-943e-a1cf3f54e41f`）。工作区注册表已重构（2026-11-09 实查 12 个），旧 15 个速查表作废，派发前一律用 `list_workspaces` 现查现用。
+- **默认工作区**：`E:\Code\muse`（标题 muse，workspaceId `7357e936-cf7d-478f-8f58-ce2567493d87`，2026-11-13 LEE 改定）。用户点名其他工作区（如「在量化看」）时按点名走。工作区注册表以 `list_workspaces` 现查为准。
 
-### 派发前确认门（每个新事项必过，2026-11-09 LEE 定）
+### 派发方式（2026-11-13 LEE 改定：确认门取消）
 
-1. 用户说「指派 DSH 去完成 XX」后，**先只回复确认、不调任何 start_\***。先定好本次模型（默认 flash/high，或拟向 LEE 建议的允许模型，见上节），再套这个句式（平台/模型换成本次选定的；偏离默认时可加一短句理由）：
-   > 将使用模型 wb2api 平台的 DeepSeek V4.1 Flash（`wb2api-nas` / `cn:deepseek-v4.1-flash` / `high`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。
-   会话状态要如实加注（2026-11-09 用户截图确认「就这样才是对的」）：上一条会话已归档、本轮是新事项要新开会话时，写成 `…DSH 工作区是 E:\Code\Ops（上一条会话已归档，这轮会新开一个会话），没问题就继续。`；同事项续接则注明沿用原会话，不许含糊带过。
-2. 用户回「继续」→ 按确认的选型派发。用户提出异议时按异议类型给现查清单让他挑，不猜、不默认替换：
-   - 说**用其他模型 / 换模型**：当场跑 `list_capabilities`，**只列可推荐范围**（wb2api 全部模型 + antigravity 的 Gemini 两个），等用户指定 provider+model 后再派。范围外平台不列出、不提及；仅指定可用模型（mq-gpt、opus）只有他当次点名才列、才可用。
-   - 说**其他目录 / 换目录**：当场跑 `list_workspaces`，**只列路径在 `E:\Code\` 之下的已注册工作区**（标题+路径），等用户指定后再派。`E:\Code` 之外的注册项（如 `D:\Program Files\DSH\bot\workspace`）不进候选；用户点名 `E:\Code` 之外的路径时先说明这条限制再请他确认。
-   - 两项都改：两份清单一起给。
-3. 确认门**只对新事项的首轮派发**。同一事项链内的后续轮次（收敛第 2 轮、从讨论转实施、纠偏、补答）继承首轮已确认的模型/工作区，**不再重复确认**；但若后续轮次要换模型或换工作区，重新过门。
-4. 用户在下令的同一条消息里已经明确写了模型和/或工作区，视为已确认该项，确认门只报未定的那项（都写全了就直接报「按你写的 X/Y 派发」并执行，不再空等一轮）。
+原「每个新事项先报模型+工作区、等 LEE 回继续才派」的确认门**已取消**。现行做法：Muse 按上节自选模型与档位、工作区走默认或用户点名，**直接派发**，并在派发回报与结果汇报里写明本次选型（模型/档位/工作区/会话新开还是沿用）。LEE 若对选型有异议会当场纠正，按纠正调整后续轮次即可，不因此恢复逐单确认。仍然有效的硬规矩不变：平台三家范围、仅指定可用模型（mq-gpt/opus）、2026-11-03 的「新增程序/新任务线/换用途先经 LEE 同意」（那是任务内容层面的同意，不是选型确认）、同一事项同一会话。
 
 ### 同一事项沿用同一会话（2026-11-09 LEE 定）
 
@@ -67,15 +59,15 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 
 ## 长任务跟进闭环（2026-11-09 LEE 定，治「说了会跟进却不跟进」）
 
-**根因（写死，别再犯）**：DSH Relay 是拉模式——没有任何推送，`wait_run` 必须由 Muse 主动调。主会话的回合一旦结束，就没有进程在等；口头说「回复一到我就续接第 2 轮」而不挂任何机制，等于永不续接。子代理/后台进程/cron 的完成回执才会由运行时重新投递进原会话、把主助手唤醒。所以：**没有挂上机制的等待承诺一律禁止说出口。**
+**根因（写死，别再犯）**：2026-11-13 前 DSH Relay 是纯拉模式——没有任何推送，`wait_run` 必须由 Muse 主动调；2026-11-13 晚终态门铃已通（relay 内 5 秒 poll loop 在 run 终态时往 ntfy `muse-run-events` 发铃，Muse 守护进程落盘到 `~/workspace/dsh-doorbell/state/run_events.jsonl`），watcher 改为等本地账本、不再远程轮询。无论哪种形态，主会话的回合一旦结束，就没有进程在等；口头说「回复一到我就续接第 2 轮」而不挂任何机制，等于永不续接。子代理/后台进程/cron 的完成回执才会由运行时重新投递进原会话、把主助手唤醒。所以：**没有挂上机制的等待承诺一律禁止说出口。**
 
 派发任何预计超过约 1 分钟、或带后续轮次（收敛/实施/验收）的 run，必须在向用户说「已派发」之前，三件套全部落地：
 
 1. **pending 登记**：写 `~/workspace/dsh-study/hidden_files/pending/<runId>.json`，字段至少含：`runId`、`sessionId`（事项正会话）、`matter`（事项一句话）、`origin_chat_id`、`stage`（如 round1-discussion）、`next_action`（终态后具体要做什么：续接的轮次与要点/要落实的修改/只需汇报，写到可直接执行）、`provider/model/workspace`、`dispatched_at`、`deadline`、`cron_id`（第 3 步建好后回填）。
-2. **watcher 子代理**：立刻 spawn 一个后台子代理，只做一件事：跑 `python3 ~/workspace/dsh-study/tools/dsh_watch.py <runId> --deadline-min <预计上限，如 90>` 并把脚本输出的终态 JSON（status + assistantText）原样带回。子代理不做判断、不续接、不改文件。它的完成回执就是主助手的唤醒信号。派单文本只给 runId 与脚本路径——token 由脚本自己读隐藏文件，不进子代理提示词。
+2. **watcher 子代理（2026-11-13 起改铃驱动）**：立刻 spawn 一个后台子代理，只做一件事：跑 `python3 ~/workspace/dsh-study/tools/watch_run_event.py <runId> --deadline-min <预计上限，如 90>` 并把脚本输出的终态 JSON（status + assistantText）原样带回。该脚本等本地 `run_events.jsonl` 出现该 run 的终态铃（relay 终态门铃经 ntfy 落盘），出现后才调一次 `get_run_summary` 取回终态——全程零远程轮询。铃超 deadline 未到输出 `watch_deadline_exceeded`，不当完成/失败结案，兜底 cron 继续查。子代理不做判断、不续接、不改文件。它的完成回执就是主助手的唤醒信号。派单文本只给 runId 与脚本路径——token 由脚本自己读隐藏文件，不进子代理提示词。旧脚本 `dsh_watch.py`（循环 `wait_run`）只作门铃失效时的降级备用。
 3. **兜底 cron**：建 per-task 的 interval cron（id 形如 `dsh-followup-<runId 前 8 位>`，每 5 分钟，delivery 回原会话），body 写明：读 pending 登记；用 dsh_client 查该 run 状态；未终态就静默结束；已终态且登记未标 continued → 按登记的 next_action 接手推进并回原会话汇报；已 continued 就自删本 cron。子代理死了、VM 换了、主会话被打断，靠它兜底。
 
-**轮询形状教训（2026-11-09 fleet-relay 实测）**：那次跟进表面上靠临时后台轮询循环撑住了，但循环是「6/8/10/16 次 × 30 秒」的定次短循环，单轮只有 3–8 分钟，而 run 本身要 14–17 分钟——循环反复在 still running 时耗尽、靠不断重新拉起才没断档，实施阶段仍逼得用户发「他回复好了，你去看」。所以定次短循环**不算**挂上机制：watcher 必须以 deadline 循环到终态为止（`dsh_watch.py` 的 `--deadline-min` 要 ≥ 预计时长＋余量，默认 90），耗尽未终态还有 cron 兜底续查。
+**轮询形状教训（2026-11-09 fleet-relay 实测）**：那次跟进表面上靠临时后台轮询循环撑住了，但循环是「6/8/10/16 次 × 30 秒」的定次短循环，单轮只有 3–8 分钟，而 run 本身要 14–17 分钟——循环反复在 still running 时耗尽、靠不断重新拉起才没断档，实施阶段仍逼得用户发「他回复好了，你去看」。所以定次短循环**不算**挂上机制：watcher 必须以 deadline 等到终态为止（`watch_run_event.py` 的 `--deadline-min` 要 ≥ 预计时长＋余量，默认 90），耗尽未终态还有 cron 兜底续查。
 
 **收到终态回执的那个回合（watcher 回执或 cron 唤醒）必须当场执行 next_action**：要续接就当场 `reply_run` 沿用正会话派下一轮（并给新一轮重新挂三件套、更新登记的 runId/stage），要落实修改就当场派实施，要汇报就完整汇报。禁止在这一回合只说「第 1 轮完成了，我接下来会…」然后结束回合——那正是旧毛病。
 
@@ -123,12 +115,12 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 ## 标准作业流程（源自两仓库 skill，不得简化）
 
 1. `list_workspaces` 按真实路径选已注册工作区；不凭调用方 cwd 猜。
-2. `list_capabilities` 取真实 provider/model/reasoningEffort/权限；不猜模型标识、不静默换提供商。扫描只看允许范围三平台（wb2api/antigravity/mq-gpt，其余 provider 忽略）。选型按首节确认门结果（默认 `wb2api-nas` / `cn:deepseek-v4.1-flash` / `high`，或已确认的建议选型），模型不可用就报告。
+2. `list_capabilities` 取真实 provider/model/reasoningEffort/权限；不猜模型标识、不静默换提供商。扫描只看允许范围三平台（wb2api/antigravity/mq-gpt，其余 provider 忽略）。选型按首节自主选型口径（wb2api 的 flash / v4-pro 二选一为主），模型不可用就报告。
 3. 派发前先查同事项正会话：扫 pending 登记 + runs-ledger，有同事项未关闭 sessionId 就复用（见「同一事项沿用同一会话」节），不 fresh。派发参数：`workspace`、`task`（只给范围/路径/授权/验收，**不贴源码、diff、压缩包**，由 DSH 自己读）、`provider`、`model`、`reasoningEffort`、`openBrowser: false`、稳定 `idempotencyKey`、`authorizationBasis: "explicit-user-request"`（仅在用户明确要求调用 DSH 时）。新事项首轮才用 `sessionMode: "fresh"`；复用走 `reply_run` 或带 `sessionId` 的 start_\*。
    - 只读任务走 `start_review`，并给 `reviewTargets`、`contextReadScope`、`excludedPaths`（凭据、.env、浏览器存储、生产数据等）。
    - 实施任务走 `start_run` + `permissionPreset: "workspace-write"` + `writeScope` 限定写入位置，或对正会话 `reply_run` 升档；任务文本声明：保留已有改动、无 commit/push/外部消息/凭据访问/破坏性清理授权。
 4. 记录返回的 `promptAdmission`、`runId`、完整 `sessionId`、`sessionReused`、`webUrl`，并立即写 pending 登记、挂 watcher 子代理与兜底 cron（见跟进闭环节）。不确定是否派发成功时用 `get_operation`/原幂等键核对，最多同键重试一次，不换新键重复派发。
-5. 等待终态由 watcher（`dsh_watch.py` 循环 `wait_run { runId, timeoutMs: 30000 }`）在后台执行，主会话不空转干等、也不在无机制时结束回合假装在等。终态：`succeeded | failed | cancelled | timeout | orphaned`。单次超时或 `hostMustCallWaitRunAgain: true` 都不是终态，继续等；运行中不宣布完成。
+5. 等待终态由铃驱动 watcher（`watch_run_event.py` 等本地 `run_events.jsonl` 的终态铃）在后台执行，主会话不空转干等、也不在无机制时结束回合假装在等。终态：`succeeded | failed | cancelled | timeout | orphaned`。单次超时或 `hostMustCallWaitRunAgain: true` 都不是终态，继续等；运行中不宣布完成。门铃失效时降级用 `dsh_watch.py` 循环 `wait_run { runId, timeoutMs: 30000 }`。
    - **长耗时教训（2026-10-20 实测）**：该机一个只读 run 实测跑了 17 分 33 秒（22:30:58→22:48:31）才 succeeded，且 start 调用的 HTTP 响应本身也迟迟不回。所有调用必须用长超时（start_* 与轮询单次 ≥240 秒、总轮询窗口 ≥20 分钟）；30–90 秒短超时必然读到空响应并误判失败。**响应丢失 ≠ 派发失败**：start 的响应没回来时，请求可能已在服务端落地，先用同一 idempotencyKey 经 get_operation/reconcile_operation 或按 runId/会话列表核对，确认不存在才允许同键重试，绝不换新键重派。现成客户端 `dsh_client.py` 已内置长超时与空响应重试。
    - **句柄过期教训（2026-10-20 夜实测 + GPT 侧源码核查修正）**：经 8443 派发的 run，事后 get_run/get_run_summary/wait_run 可能回 `-32003 FORBIDDEN / reason: expired`，**run 在 DSH 里正常跑完也读不回 assistantText**。GPT 侧查 Relay 0.2.17 源码证实：该错误码**不是 Relay 的**（Relay 无 -32003/FORBIDDEN；其 runs/operations 会落盘到 `%LOCALAPPDATA%\dsh-relay\state.json` 并在重启时恢复、无 TTL/删除逻辑；Relay 的 expired 仅指权限回滚租约、默认 24h）——错误来自生产 8443 适配器层（真实代码在 `E:\Code\Tools\DSH-Remote-MCP`，**未注册为 DSH 工作区**、外部只读不到，其确切失效条件未定论，勿再猜「句柄只存内存」）。可靠姿势（GPT 侧验证 + 其源码建议）：① start 前生成 idempotencyKey 并连同响应里的 runId/operationId/sessionId **立即落盘**（`dsh_client.py` 自动记 `hidden_files/runs-ledger.jsonl`）；② 用 `wait_run(timeoutMs: 30000)` 循环等终态（服务端单次上限就是 30 秒，传更大无用；MCP 端点无状态、不需常驻连接，但必须指向同一 Relay authority/state）；③ 终态立刻把 assistantText 落盘，不把「事后靠 runId 取回」当唯一保障；④ start 响应丢失用同一 idempotencyKey 重放，再用 get_operation/list_runs 对账。实例：md 计数单（runId 22e3cb35-bc06-45da-8ace-a79c23a1043a、session-42f7a707-d1bf-4385-9a2d-a9483043e762）即因此未能自取其回复，最终答案由 GPT 侧另行实测给出（主机NAS 根目录 .md 共 2 个）。
 6. 读终态 `assistantText` 自行复核（只读结论核对文件/行证据；实施任务对照实际改动与测试结果）。DSH 的自述不等于验收通过。
@@ -139,3 +131,24 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 - 路径声明（reviewTargets 等）是指令而非沙箱：范围内内容会被 DSH 发给所选模型提供商。
 - `workspace-write` 碰越界写入会等人在 Windows 本机点确认，远程无人点会表现为卡住：派活前与用户约定确认方式，或缩小 writeScope。
 - token = 该机代码执行入口：不落盘、不进记忆、不转发给任何第三方/子代理的持久上下文。
+
+## 反向通道（DSH→Muse，8443 pickup + ntfy 门铃，2026-11-13 第 2 轮建成）
+
+与 GitHub 收件箱并行的实时通道：DSH 用入队口投单到适配器队列（`E:\Code\muse\queue\{pending,done}`，2026-11-13 晚自适配器 state-tailnet 迁入互派专区；`E:\Code\muse` 已注册为 DSH 工作区，workspaceId `7357e936-cf7d-478f-8f58-ce2567493d87`、标题 muse，互派通道相关的派单/调研/报告默认以它为工作区），同时往 free-vps ntfy 的 topic `muse-doorbell` 发一条只带任务 id 的门铃。DSH 侧 `ask-muse` 技能 v3.0.0 起默认走此实时通道，GitHub 私库降为兜底（入队失败/适配器不通/LEE 点名才走，仍逐单确认门）。同一 id 两边都出现时只处理一次（先到为准、另一边标 done）。
+
+**Muse 侧组件**：
+
+- 订阅守护进程 `~/workspace/dsh-doorbell/daemon.py`（仅出站订阅 `<ntfy-host>:2586/muse-doorbell/json` 流、断线带 `since` 补投、单实例 flock），收到铃落 `state/inbox.jsonl`；hook `dsh-doorbell-watchdog`（60 秒）保活，拉起失败才唤醒告警。
+- 唤醒 hook `dsh-doorbell-inbox`（10 秒，delivery 主聊天）：脚本 `~/hooks/scripts/dsh-doorbell-inbox.sh` 扫账本，检出先 mark woken 再唤醒；账本工具 `~/workspace/dsh-doorbell/check.py`（scan/mark，状态 new→woken→notified→done；woken 超 15 分钟未推进会兜底重唤醒一次）。
+- `dsh_client.py` 已加 token 锁内重读 + flock 串行 refresh、401 重读重试（2026-11-13），多进程并发调 8443 不再怕轮换撞车。
+
+**被唤醒后的处理协议（2026-11-13 17:38 LEE 改定：门铃单自动接受，不再逐单等回执）**：
+
+1. 调 `pickup` 取 id 对应条目全文（pickup 取走不删、服务端以 `done/` 判已办，天然幂等）。
+2. **Muse 自行 accept 并执行正文**，不再逐条向 LEE 汇报等四型回执。执行后按重要程度向 LEE 简报结果（联测/只读/常规单简报即可，失败或异常才展开）。
+3. **硬卡点不自动、仍先报 LEE 批准**：付款/支付、凭据、删除与不可逆改动、在任何机器上新增程序/新任务线/换用途（2026-11-03 规矩），以及明显超出单子本身范围的扩张。GitHub 私库收件箱的兜底单不适用本节自动接受，仍走其原确认门（每单先报 LEE、批准后才执行）。
+4. 执行完调 `report {id, resolution, status, evidence}` 落 `done/<id>.result.json`（二次 report 回 already_reported，不报错），本地 `mark <id> done`。
+5. pickup 里查无此 id（测试铃/已处理）：mark done、一句说明，不刷屏。
+6. 队列深度与最老条目年龄可调 `status` 查；门铃断档不丢件——ntfy 缓存 12 小时 + 队列在 DSH 侧常存，最坏退回 git 兜底。
+
+延迟口径（实测基线）：发布→守护进程落盘约 1 秒（2026-11-13 自测）；唤醒 hook 周期 10 秒；端到端目标 10–35 秒到 LEE 眼前。

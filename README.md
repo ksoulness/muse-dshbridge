@@ -2,23 +2,24 @@
 
 把云端的 **Meta Muse**（跑在云电脑上的个人 agent）接到用户自己的两个世界里：
 
-- **向下派活**：经 Tailscale 私有网络，远程调用用户 Windows 电脑上的 **DSH（DeepSeek Harness）**，在指定工作区里发起对话、执行任务、验收结果；
+- **Muse → DSH 派活**：经 Tailscale 私有网络，远程调用用户 Windows 电脑上的 **DSH（DeepSeek Harness）**，在指定工作区里发起对话、执行任务、验收结果；
+- **DSH → Muse 派活**（2026-11-13 建成）：DSH 侧的 `ask-muse` 技能把任务入队并按响门铃，Muse 被唤醒后取单、自动执行、回执——两个 agent 自此**互相指派**，不再经 GitHub 中转、不再靠定时轮询跟进；
 - **随身对话**：经腾讯官方 ClawBot 微信插件 + wx-bot 桥接，让用户在微信里直接和 Muse 聊天。
 
-一句话：**DSH 线是「Muse → tailnet → OAuth 适配器 → DSH Relay」的受控派发通道；微信线是「微信 → ClawBot 协议 → wx-bot 收件箱 → 唤醒 Muse」的消息通道。** 本仓库是这两条链路的**项目记录 + 操作手册 + 技能文件**，2026-10-20 一晚全部实测打通。
+一句话：**DSH 线是一套双向实时互派系统——正向是「Muse → tailnet → OAuth 适配器 → DSH Relay」派发 + 「relay 终态门铃 → ntfy → Muse」推送跟进；反向是「DSH 入队 + ntfy 门铃 → Muse 守护进程唤醒 → 经适配器 pickup 取单」；两个方向共用一个互派专区工作区 `E:\Code\muse`。微信线是「微信 → ClawBot 协议 → wx-bot 收件箱 → 唤醒 Muse」的消息通道。** 本仓库是这些链路的**项目记录 + 操作手册 + 技能文件**：正向 2026-10-20 实测打通，双向实时 2026-11-13 建成并四轮实测验收。
 
 ```
                         ┌──────────────── 云电脑（Muse 常驻）────────────────┐
                         │  Muse 本体 ── dsh_client.py（OAuth 自续 + 台账）      │
-                        │  Muse 本体 ── hooks（微信收件箱轮询 / 看门狗）        │
-                        └──────┬──────────────────────────────┬─────────────────┘
-              tailnet (Tailscale Serve :8443)        HTTPS 长轮询 (ilinkai.weixin.qq.com)
-                               ▼                              ▼
-                 Windows 电脑 · DSH            wx-bot（systemd 常驻，pull 模式）
-                   Relay MCP :3079                    │ 微信 ClawBot 插件
-                   12 个工作区 / 默认模型              ▼
-                   wb2api-nas / cn:deepseek-      用户的微信
-                   v4.1-flash / high（派发前二次确认）
+                        │           ── doorbell daemon（订阅 ntfy 两条流落盘）    │
+                        │           ── hooks（门铃唤醒 / 微信收件箱 / 看门狗）      │
+                        └──────┬──────────────────────┬───────────────┬───────┘
+              tailnet (Tailscale Serve :8443)   ntfy（自托管，tailnet-only）  HTTPS 长轮询（微信）
+                               ▼              ▲        │               ▼
+                 Windows 电脑 · DSH      终态铃        门铃        wx-bot（用户微信）
+                   Relay MCP :3079     muse-run-events  muse-doorbell
+                   互派专区 E:\Code\muse（队列 + 共享工作区）
+                   ask-muse 技能（DSH → Muse 的派活入口）
 ```
 
 ## 为什么需要这两条线
@@ -31,11 +32,18 @@
 
 ## 特性
 
-**DSH 线**
-- **下令定式 + 派发前二次确认（2026-11-09 改版，默认模型 2026-11-10 改为 flash/high、分层改为建议制）**：用户说「指派 DSH 去完成 `<任务>`」，Muse **不直接派**，先报确认门——默认模型 `wb2api-nas / cn:deepseek-v4.1-flash / high`、默认工作区 `E:\Code\Ops`（Muse 按复杂度分层建议：简单/常规→flash 或 hy3 类轻模型、标准/复杂→v4-pro、换家族视角→Gemini，在确认门里报出推荐、等用户点头才换；无特别建议时走默认 flash/high；各模型档位逐个不同，如 flash 无 medium/off，推荐时必须按该模型自己的档位清单选），用户回「继续」才派发；任务前缀 `muse指派-`、同一事项沿用同一会话、只读走 `start_review`、稳定幂等键。旧口径「不问直接派」已废止（默认模型本身 2026-11-10 又定为 flash/high，但必须过确认门）。见 [docs/DSH-CONTROL.md](docs/DSH-CONTROL.md)
-- **长任务可靠姿势**：`wait_run` 每 30 秒一轮跟到终态（实测有单跑了 17 分 33 秒）；终态正文立即落盘，run 台账（runId / sessionId / 幂等键 / 起止 / 正文）自动记入本地 ledger
+**DSH 线（正向：Muse → DSH）**
+- **下令定式（2026-11-13 改定：确认门取消、选型自主）**：用户说「指派 DSH 去完成 `<任务>`」，Muse 在 wb2api 的 DeepSeek V4.1 Flash 与 V4 Pro 之间按复杂度自选模型与推理档位、**直接派发**，并在回报里写明本次选型；默认工作区 `E:\Code\muse`（互派专区），用户点名其他工作区时按点名走。平台范围仍只许三家（wb2api / antigravity / mq-gpt），其中 mq-gpt 全部模型与 antigravity 的 Opus 仅用户强制指定才可用、绝不自主选；任务前缀 `muse指派-`、同一事项沿用同一会话、只读走 `start_review`、稳定幂等键。旧口径「派发前先过确认门、等用户回继续」已于 2026-11-13 废止。见 [docs/DSH-CONTROL.md](docs/DSH-CONTROL.md)
+- **终态门铃（2026-11-13 建成，跟进从拉改推）**：relay 内加一个 5 秒 poll loop，run 到终态（succeeded / incomplete / failed / cancelled）即往自托管 ntfy 的 `muse-run-events` topic 发一条铃（runId / sessionId / 状态）；放行条件是 serviceId 白名单或任务以 `muse指派` 开头。Muse 侧守护进程订阅落盘，watcher 改等本地账本（`tools/watch_run_event.py`，零远程轮询），铃到才取一次终态正文；每单 5 分钟兜底 cron 保留作最后一道保险。实测新鲜单端到端 6~8 秒（DSH 侧发铃 <2 秒，其余是 ntfy 送达）
+- **长任务可靠姿势**：终态正文立即落盘，run 台账（runId / sessionId / 幂等键 / 起止 / 正文）自动记入本地 ledger；`wait_run` 轮询只作门铃失效时的降级备用
 - **token 自续**：access 过期自动用 refresh 轮换，新 token 对原子落盘（600 权限）；旧 refresh 重放会吊销整族，所以永远先落盘再干活
-- **验收闭环**：确认门通过 → 派发（长单先挂 pending 登记 + watcher + 兜底 cron）→ 等终态 → 读 `assistantText` 自行复核 → 整件事结束才归档正会话并回读复核（`archived: true, running: false` 才算数）→ 按固定格式回报
+- **验收闭环**：派发（长单先挂 pending 登记 + 铃驱动 watcher + 兜底 cron）→ 铃到取终态 → 读 `assistantText` 自行复核（**实施类单子必须附日志原文证据，自报结论不算数**——2026-11-13 四轮实测的教训，见下）→ 整件事结束才归档正会话并回读复核（`archived: true, running: false` 才算数）→ 按固定格式回报
+
+**DSH 线（反向：DSH → Muse，2026-11-13 建成）**
+- **入口是技能，不是插件**：DSH 侧装了一个名为 `ask-muse` 的**技能**（v3.0.0，位于 DSH 的技能目录）；用户在 DSH 侧说「问 Muse / 让 Muse 查 / 给 Muse 派活」，DSH 即走该技能投单
+- **入队 + 门铃**：入队脚本先做机密扫描，再把任务原子写入互派专区队列 `E:\Code\muse\queue\{pending,done}`，同时往 ntfy 的 `muse-doorbell` topic 发一条**只带任务 id** 的门铃（正文不走 ntfy，经 8443 取）
+- **取单 + 自动接受**：Muse 侧守护进程收到铃落盘，唤醒 hook 约 10 秒内叫醒主会话；Muse 经适配器的 `pickup` 工具取正文，**自行 accept 并执行**（2026-11-13 改定，不再逐单等用户回执），办完调 `report` 回执落 `done/`；硬卡点不自动——付款/支付、凭据、删除与不可逆改动、在任何机器上新增程序/新任务线/换用途，仍先报用户批准
+- **GitHub 私有收件箱降为兜底**：实时通道不可用（入队失败/适配器不通）或用户点名时才走 GitHub 私库投单，仍逐单确认门；同一 id 两边都出现只处理一次。门铃断档不丢件：ntfy 缓存 12 小时 + 队列在 DSH 侧常存
 
 **微信线**
 - **纯官方协议**：ClawBot 插件扫码绑定，`getUpdates` 长轮询收消息、`sendMessage` 发消息，全程 HTTPS，不碰任何非官方 Hook
@@ -48,7 +56,9 @@
 
 1. Windows 侧：DSH 运行中（Relay 插件启用）；适配器起第二个实例监听本机 `:18081`（独立 OAuth 库），`tailscale serve` 把 tailnet 的 `:8443` 指给它
 2. 云端：客户端向 `:8443` 动态注册（DCR），所有者在本机浏览器走完 OAuth 授权（口令只在本机输），拿到 access + refresh 对
-3. 之后一切走技能手册：`skills/dsh-relay-operation/SKILL.md` —— 把它交给 Muse，它就会按定式派活
+3. 反向与门铃（Windows 侧）：适配器加三个本地工具 `pickup / report / status` + 建队列目录（落在互派专区工作区 `E:\Code\muse\queue`，该工作区先注册好）；relay 运行包里加终态门铃 poll 钩子（改前留备份）；DSH 侧装 `ask-muse` 技能（入队脚本 + 发门铃）
+4. 云端：跑门铃守护进程（订阅自托管 ntfy 的 `muse-doorbell` 与 `muse-run-events` 两条流、落盘、断线带 `since` 补投）+ 唤醒 hook（约 10 秒）+ 守护进程看门狗
+5. 之后双向都走技能手册：`skills/dsh-relay-operation/SKILL.md` —— 把它交给 Muse，它就会按定式双向派活
 
 **微信线**（详见 [docs/WECHAT-BRIDGE.md](docs/WECHAT-BRIDGE.md)）
 
@@ -68,6 +78,14 @@
 
 `docs/` 下的原有方法文档（`DSH-CONTROL.md`、`WECHAT-BRIDGE.md`、`TROUBLESHOOTING.md`
 等）仍保留，被这三个文件夹引用，不重复写。
+
+## 实测记录（2026-11-13）
+
+- **双向实时互派建成**：DSH → Muse 联测单入队 → 守护进程约 6 秒落盘 → 唤醒 → pickup 取单 → report 回执 → 队列归零，全程秒级，不再经 GitHub 中转
+- **互派专区归一**：`E:\Code\muse` 建成并注册为 DSH 工作区（标题 muse），队列、回执、调研报告都归一处；正向默认工作区同步改到这里。自此正反两向是同一套系统、同一份记录，不再分开维护
+- **终态门铃四轮才通**：第 1 轮把铃挂在宿主的事件流路径上——该路径的前置开关 `supportsEventStreams()` 在 DSH 宿主里恒为 false，钩子是死代码，真单全漏；第 2 轮自报的根因（relay 从未重启）被日志证伪（当日实际重启多次）；第 3 轮改 5 秒 poll loop 并定位真根因；第 4 轮换另一个模型（Flash）独立调取 relay 侧日志原文交叉核验，确认 FIRE 在终态后约 0.3 秒、POST 约 1 秒内完成。教训：**执行方的自报根因不可信，验收要一手日志**
+- **铃时延三连实测**：新鲜真单终态 → Muse 侧账本落盘约 6 秒 / 8 秒 / 7 秒（flash 与 pro 的单无差别）；重启会把存量终态单重发一遍铃（去重表只在进程内存），消费侧按 runId + 状态去重即可无害
+- **确认门取消**：同日用户改定——选型由 Muse 在 Flash / V4 Pro 间自选自定、直接派发、回报写明，不再逐单等「继续」
 
 ## 实测记录（2026-10-20）
 
@@ -93,7 +111,7 @@ wechat-optimization/scripts/ctx.py
 wechat-first-connect/      ★ 二、第一次连接微信出问题怎么办：绑定风控、登录过期、重复唤醒、验收标准
 dsh-connection/            ★ 三、DSH 的连接：8443 通道、OAuth 建连、token 自续、派发流程
 docs/FOR-NEW-MUSE.md       ★ 给新 Muse 的总入口：阅读顺序、前置清单、铁律、验收标准
-docs/DSH-CONTROL.md        DSH 线完整方法：通道、定式、流程、坑
+docs/DSH-CONTROL.md        DSH 线完整方法：双向通道（正向派发 + 终态门铃 + 反向入队取单）、定式、流程、坑
 docs/WECHAT-BRIDGE.md      微信线完整方法：协议、部署、hook、坑
 docs/NOTIFICATION-ROUTING.md
                            通知路由与隔离口径：哪些推微信、哪些静默（用户确认生效）
@@ -102,8 +120,9 @@ docs/WECHAT-SETUP-PROMPT.md
 docs/TROUBLESHOOTING.md    两条线的故障速查表
 skills/dsh-relay-operation/SKILL.md
                            交给 Muse 的 DSH 操作技能手册（定式版）
-tools/dsh_client.py        DSH 客户端：token 自续 + 台账 + 长超时重试
-tools/dsh_watch.py         长任务 watcher：deadline 制 wait_run 循环，跟进闭环用
+tools/dsh_client.py        DSH 客户端：token 自续 + 台账 + 长超时重试（带并发锁与 401 重读重试）
+tools/watch_run_event.py   铃驱动 watcher：等本地终态铃账本出现目标 run 才取回终态（现行跟进主力）
+tools/dsh_watch.py         轮询版 watcher：deadline 制 wait_run 循环，门铃失效时的降级备用
 ```
 
 **让一个新的 Muse 学会这两件事**：把本仓库地址给它，并让它先读 `docs/FOR-NEW-MUSE.md`。仓库教方法，但权限不在仓库里——DSH 的 OAuth token 对要所有者在 Windows 侧签发后交付，微信要所有者装插件并扫码一次，这两步天然只能由人完成。

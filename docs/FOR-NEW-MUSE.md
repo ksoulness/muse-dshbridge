@@ -1,6 +1,6 @@
 # 给新 Muse 的总入口：学会这两个技能
 
-你（一个新接手的 Muse）要用这个仓库学会两件事：**① 经 tailnet 调用用户 Windows 电脑上的 DSH 派活；② 把用户的微信接给自己。** 按下面顺序读、按清单向用户要东西，不要跳步、不要猜。
+你（一个新接手的 Muse）要用这个仓库学会两件事：**① 与用户 Windows 电脑上的 DSH 双向互派（你派活给它、它也派活给你，两个方向都是实时推送）；② 把用户的微信接给自己。** 按下面顺序读、按清单向用户要东西，不要跳步、不要猜。
 
 ## 先读什么（顺序写死）
 
@@ -9,7 +9,7 @@
 3. **技能二（微信）**：`docs/WECHAT-SETUP-PROMPT.md`（逐步执行指令，照着做）+ `docs/WECHAT-BRIDGE.md`（原理与规矩）
 4. `docs/TROUBLESHOOTING.md` —— 动手前先扫一遍，今晚所有的坑都在里面
 
-## 技能一：调用 DSH —— 你需要先从用户那里拿到什么
+## 技能一：与 DSH 互派 —— 你需要先从用户那里拿到什么
 
 代码和手册只是方法，**权限不在仓库里**。开工前确认这四样，缺哪样找用户要哪样：
 
@@ -19,14 +19,16 @@
 | 2 | Windows 侧适配器已部署 | DSH 在运行、Relay 插件启用、本机 `:18081` 第二实例 + Serve `:8443` 已配（属用户/DSH 侧工程，本仓库只记录形态） |
 | 3 | **一对 OAuth token**（access 1h + refresh 30d） | 只能由用户在 Windows 侧签发后交给你，或用户在浏览器里走完授权把 token 对给你。存进 600 权限的 state 文件（格式见 `tools/dsh_client.py` 头注），**只记位置、不要把值写进任何文档/记忆** |
 | 4 | 客户端脚本 | 就用本仓库 `tools/dsh_client.py`（自带 token 自续、台账、空响应重试），不要自己重写 |
+| 5 | 反向通道的 Muse 侧组件 | 门铃守护进程（订阅自托管 ntfy 的 `muse-doorbell` + `muse-run-events` 两条流、落盘）+ 唤醒 hook（约 10 秒）+ 看门狗；DSH 侧需已装 `ask-muse` 技能与队列（属 DSH 侧工程，形态见 DSH-CONTROL.md 第 7 节） |
 
 **三条铁律（违反过的都付出了丢单代价）：**
 
 - **永远不要向用户索要 Relay 的静态 Bearer token**——那是那台机器的完整执行权，用户已明确拒绝经聊天传递；你只用 OAuth token 对
-- **派发前必须二次确认（2026-11-09 改版，旧「不问直接派」已废止）**：默认模型 `wb2api-nas / cn:deepseek-v4.1-flash / high`、默认工作区 `E:\Code\Ops`；用户说「指派 DSH 去完成 `<任务>`」后，先只报确认门——「将使用模型 wb2api 平台的 DeepSeek V4.1 Flash（`wb2api-nas` / `cn:deepseek-v4.1-flash` / `high`），DSH 工作区是 `E:\Code\Ops`，没问题就继续。」（上一条会话已归档、本轮新开会话时在工作区后加注这一句）——等用户回「继续」才派，不调任何 `start_*` 抢跑；无特别建议时走默认 flash（其 reasoningEffort 只有 `low/high/max`，无 `medium`、无 `off`、无 defaultEffort，默认显式传 `high`，不要传 medium/off、也不要省略）；按复杂度分层不取消、但走建议制：Muse 按复杂度（简单→flash/hy3 类、标准/复杂→v4-pro `medium` 起、换家族视角→Gemini）在确认门里建议允许平台内的其他模型、等用户点头才换，档位必须按所选模型自己的 capabilities 清单选（各模型档位不同，有些就没有 medium），mq-gpt 与 antigravity 的 opus 仅用户强制指定才可用；同一事项后续轮次继承已确认选型、不重复确认，整件事沿用同一会话；其余按 SKILL.md 定式补齐，回报必含 runId / sessionId / 起止时间 / 终态 / 交付摘要 / 归档状态
-- 派发后用 `wait_run(timeoutMs=30000)` **循环等到终态、当场把正文落盘**；运行时长方差极大（22 秒 ~ 17 分钟都出现过），事后按 runId 取回可能被适配器层 `FORBIDDEN / expired` 拒掉——不要把「事后取回」当保障
+- **选型自主、直接派发（2026-11-13 改定，旧「派发前二次确认门」已废止）**：默认工作区 `E:\Code\muse`（互派专区）；模型在 wb2api 的 DeepSeek V4.1 Flash 与 V4 Pro 之间按复杂度自选、档位自定（简单/常规→flash `low`/`high`、标准/复杂→v4-pro `medium` 起；档位逐模型各查各的，flash 只有 `low/high/max`、无 `medium`、无 `off`），派完在回报里写明选型；mq-gpt 与 antigravity 的 opus 仅用户强制指定才可用、绝不推荐绝不自主选；同一事项全程沿用同一会话
+- 派发后跟进靠**终态门铃**：relay 的 5 秒 poll loop 在 run 终态时发铃到 ntfy，守护进程落盘，watcher 等本地账本（`tools/watch_run_event.py`）取回终态；`wait_run(timeoutMs=30000)` 循环只作门铃失效时的降级。运行时长方差极大（22 秒 ~ 17 分钟都出现过），事后按 runId 取回可能被适配器层 `FORBIDDEN / expired` 拒掉——不要把「事后取回」当保障；实施类单子的验收必须附日志原文证据，执行方自报不算数
+- **反向单（DSH → 你）自动接受**：门铃通道来的单自行 accept 并执行、办完回 `report`，不再逐单等用户回执；但硬卡点（付款、凭据、删除/不可逆、新增程序/新任务线）仍先停下报用户批准；GitHub 私库兜底单不适用自动接受，仍逐单确认
 
-验收标准（做到才算学会）：先过确认门（报默认/推荐模型 + 工作区、等用户回「继续」）→ 在确认的工作区派一个只读任务 → 拿到终态 → 正文与事实对得上 → 整件事结束才归档并回读复核 `archived: true, running: false` → 台账里 started/terminal 两行齐全。
+验收标准（做到才算学会）：按自选型在默认工作区派一个只读任务（回报写明选型）→ 终态门铃到达、取回终态 → 正文与事实对得上 → 整件事结束才归档并回读复核 `archived: true, running: false` → 台账里 started/terminal 两行齐全；反向再验一单：DSH 侧 ask-muse 投单 → 你被门铃唤醒 → pickup 取单执行 → report 回执落 done。
 
 ## 技能二：连接微信 —— 你需要先从用户那里拿到什么
 

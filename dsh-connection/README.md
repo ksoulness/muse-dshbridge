@@ -85,19 +85,20 @@ MCP 端点是无状态的（每次 POST 新建 transport），客户端进程不
 （含 assistantText 全文截断备份）。
 
 ```
-【派发前二次确认门，2026-11-09 改版】先报模型+工作区，等用户回「继续」才派
-  默认：wb2api 平台的 DeepSeek V4.1 Flash（wb2api-nas / cn:deepseek-v4.1-flash / high；flash 档位只有 low/high/max，无 medium/off）
-        + 工作区 E:\Code\Ops；旧口径「固定 flash、不问直接派」已废止，
-        完整规则（允许平台、异议清单、同事项单会话）见 SKILL.md 首节
+【选型自主，2026-11-13 改定】按复杂度在 flash / v4-pro 间自选直接派，回报写明选型
+        （旧口径「先过确认门、等用户回继续」已废止；平台范围与仅指定可用清单见 SKILL.md 首节）
+        默认工作区 E:\Code\muse（互派专区），点名其他工作区按点名走
   → doctor → list_workspaces（复核）→ list_capabilities（确认选型）
   → start_review / start_run（新事项首轮）或 reply_run（同事项续接同一会话）
-       （响应里的 runId/operationId/sessionId 立即落盘；长单挂 watcher + 兜底 cron）
-  → wait_run(timeoutMs=30000) 循环，直到终态
+       （响应里的 runId/operationId/sessionId 立即落盘；长单挂铃驱动 watcher + 兜底 cron）
+  → 终态门铃到达本地账本后取回终态（watch_run_event.py）；门铃失效才降级 wait_run 循环
        succeeded | failed | cancelled | timeout | orphaned
   → 读 assistantText 自行复核（DSH 的自述 ≠ 验收通过）
   → 整件事结束才 archive_terminal_session，并回读复核 archived:true, running:false
   → 写台账 + 按格式回报用户
 ```
+
+反方向（DSH → Muse）不在本篇展开：入口是 DSH 侧的 `ask-muse` **技能**，经队列 + ntfy 门铃唤醒 Muse、8443 `pickup` 取单，全文见 [docs/DSH-CONTROL.md](../docs/DSH-CONTROL.md) 第 7 节。两个方向共用同一套 8443 通道与互派专区，自 2026-11-13 起作为一套系统维护。
 
 要点：
 
