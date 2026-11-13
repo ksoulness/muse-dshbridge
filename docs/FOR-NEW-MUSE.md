@@ -6,9 +6,10 @@
 
 1. `README.md` —— 两条线的总览与安全边界
 2. `docs/INTEROP.md` —— 两边怎么互通的全景（组件形态逐个标明：技能/插件/程序/脚本；两条方向的时序）
-3. **技能一（DSH）**：`skills/dsh-relay-operation/SKILL.md`（定式手册，全文执行）+ `docs/DSH-CONTROL.md`（原理与坑）
-4. **技能二（微信）**：`docs/WECHAT-SETUP-PROMPT.md`（逐步执行指令，照着做）+ `docs/WECHAT-BRIDGE.md`（原理与规矩）
-5. `docs/TROUBLESHOOTING.md` —— 动手前先扫一遍，今晚所有的坑都在里面
+3. `docs/TAKEOVER.md` —— 接管须知：DSH 侧系统接管与 DSH Bot 接管的区别、Muse 侧接管注意、**归档分工**、两边怎么互相联系
+4. **技能一（DSH）**：`skills/dsh-relay-operation/SKILL.md`（定式手册，全文执行）+ `docs/DSH-CONTROL.md`（原理与坑）
+5. **技能二（微信）**：`docs/WECHAT-SETUP-PROMPT.md`（逐步执行指令，照着做）+ `docs/WECHAT-BRIDGE.md`（原理与规矩）
+6. `docs/TROUBLESHOOTING.md` —— 动手前先扫一遍，今晚所有的坑都在里面
 
 ## 技能一：与 DSH 互派 —— 你需要先从用户那里拿到什么
 

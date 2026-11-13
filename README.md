@@ -86,6 +86,7 @@
 ## 实测记录（2026-11-13）
 
 - **双向实时互派建成**：DSH → Muse 联测单入队 → 守护进程约 6 秒落盘 → 唤醒 → pickup 取单 → report 回执 → 队列归零，全程秒级，不再经 GitHub 中转
+- **DSH 侧 Bot 级接管（2026-11-13 20:35）**：DSH 侧的收发、回报与车道守夜由「**Muse 联络**」bot 负责，工作区 `E:\Code\muse`；系统层组件（8443 适配器 / serve 映射 / 看门狗 / 队列 / 门铃钩子）未变。两类接管的区别、Muse 侧接管注意、**归档分工**与两边联系定式见 [docs/TAKEOVER.md](docs/TAKEOVER.md)
 - **互派专区归一**：`E:\Code\muse` 建成并注册为 DSH 工作区（标题 muse），队列、回执、调研报告都归一处；正向默认工作区同步改到这里。自此正反两向是同一套系统、同一份记录，不再分开维护
 - **终态门铃四轮才通**：第 1 轮把铃挂在宿主的事件流路径上——该路径的前置开关 `supportsEventStreams()` 在 DSH 宿主里恒为 false，钩子是死代码，真单全漏；第 2 轮自报的根因（relay 从未重启）被日志证伪（当日实际重启多次）；第 3 轮改 5 秒 poll loop 并定位真根因；第 4 轮换另一个模型（Flash）独立调取 relay 侧日志原文交叉核验，确认 FIRE 在终态后约 0.3 秒、POST 约 1 秒内完成。教训：**执行方的自报根因不可信，验收要一手日志**
 - **铃时延三连实测**：新鲜真单终态 → Muse 侧账本落盘约 6 秒 / 8 秒 / 7 秒（flash 与 pro 的单无差别）；重启会把存量终态单重发一遍铃（去重表只在进程内存），消费侧按 runId + 状态去重即可无害
@@ -115,6 +116,7 @@ wechat-optimization/scripts/ctx.py
 wechat-first-connect/      ★ 二、第一次连接微信出问题怎么办：绑定风控、登录过期、重复唤醒、验收标准
 dsh-connection/            ★ 三、DSH 的连接：8443 通道、OAuth 建连、token 自续、派发流程
 docs/FOR-NEW-MUSE.md       ★ 给新 Muse 的总入口：阅读顺序、前置清单、铁律、验收标准
+docs/TAKEOVER.md           ★ 接管须知：DSH 侧系统接管 vs DSH Bot 接管、Muse 侧接管注意、归档分工、两边怎么联系
 docs/DSH-CONTROL.md        DSH 线完整方法：双向通道（正向派发 + 终态门铃 + 反向入队取单）、定式、流程、坑
 docs/WECHAT-BRIDGE.md      微信线完整方法：协议、部署、hook、坑
 docs/NOTIFICATION-ROUTING.md

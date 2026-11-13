@@ -1,2 +1,11 @@
 __pycache__/
 *.pyc
+
+# 本机运行态与项目生命周期，不进公开仓库
+queue/
+research/
+docs/planned/
+docs/in-progress/
+docs/completed/
+docs/project-backups/
+
