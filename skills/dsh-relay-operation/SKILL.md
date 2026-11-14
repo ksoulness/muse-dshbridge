@@ -66,6 +66,7 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 
 1. **pending 登记**：写 `~/workspace/dsh-study/hidden_files/pending/<runId>.json`，字段至少含：`runId`、`sessionId`（事项正会话）、`matter`（事项一句话）、`origin_chat_id`、`stage`（如 round1-discussion）、`next_action`（终态后具体要做什么：续接的轮次与要点/要落实的修改/只需汇报，写到可直接执行）、`provider/model/workspace`、`dispatched_at`、`deadline`。
 2. **watcher 子代理（2026-11-13 起改铃驱动）**：立刻 spawn 一个后台子代理，只做一件事：跑 `python3 ~/workspace/dsh-study/tools/watch_run_event.py <runId> --deadline-min <预计上限，如 90>` 并把脚本输出的终态 JSON（status + assistantText）原样带回。该脚本等本地 `run_events.jsonl` 出现该 run 的终态铃（relay 终态门铃经 ntfy 落盘），出现后才调一次 `get_run_summary` 取回终态——全程零远程轮询。铃超 deadline 未到输出 `watch_deadline_exceeded`，不当完成/失败结案，登记保留、由主会话后续回合的 pending 自检补查。子代理不做判断、不续接、不改文件。它的完成回执就是主助手的唤醒信号。派单文本只给 runId 与脚本路径——token 由脚本自己读隐藏文件，不进子代理提示词。旧脚本 `dsh_watch.py`（循环 `wait_run`）只作门铃失效时的降级备用。
+2b. **跟进节奏（LEE 2026-11-14 定版，两侧同守）**：扫描不要密——前 30 分钟 **60 秒一轮**，超过 30 分钟 **5 分钟一轮**，超过 2 小时不再紧盯终态、每轮着重核一次任务**还在不在运行**（存活核对）。两个 watcher 脚本已按此实现（`watch_run_event.py` 本地账本 60s→300s；`dsh_watch.py` 周期 60s→300s＋2 小时后每轮 `get_run` 存活核对写进 `liveness`）。DSH 侧发铃 poll loop 同步为 60 秒。
 3. **兜底 cron 已取消（2026-11-13 晚 LEE 定）**：终态门铃实测稳定后，per-task 的 5 分钟兜底 cron（`dsh-followup-*`）**不再建**；跟进只靠 pending 登记 + 铃驱动 watcher 两件套。watcher 异常退出或超 deadline 时，靠主会话每回合开始的 pending 自检（见本节末自检条）补上，不再另设定时任务。
 
 **轮询形状教训（2026-11-09 fleet-relay 实测）**：那次跟进表面上靠临时后台轮询循环撑住了，但循环是「6/8/10/16 次 × 30 秒」的定次短循环，单轮只有 3–8 分钟，而 run 本身要 14–17 分钟——循环反复在 still running 时耗尽、靠不断重新拉起才没断档，实施阶段仍逼得用户发「他回复好了，你去看」。所以定次短循环**不算**挂上机制：watcher 必须以 deadline 等到终态为止（`watch_run_event.py` 的 `--deadline-min` 要 ≥ 预计时长＋余量，默认 90），耗尽未终态靠 pending 登记在后续回合自检补查。
@@ -156,6 +157,11 @@ description: "通过 tailnet 直连用户 Windows 电脑上的 DSH（DeepSeek Ha
 6. 队列深度与最老条目年龄可调 `status` 查；门铃断档不丢件——ntfy 缓存 12 小时 + 队列在 DSH 侧常存，最坏退回 git 兜底。
 
 延迟口径（实测基线）：发布→守护进程落盘约 1 秒（2026-11-13 自测）；唤醒 hook 周期 10 秒；端到端目标 10–35 秒到 LEE 眼前。
+
+
+## 终态铃会被 DSH 升级抹掉（2026-11-14 实证）
+
+发铃 poll loop 是打在 DSH 运行真身 bundle（`dsh-relay-harness.mjs`）上的**非版本化本地 patch**；DSH 升级/重装会把 bundle 换回干净 dist、连含 patch 的 .bak 备份一并删掉，症状＝真单终态后本地 `run_events.jsonl` 无新铃（2026-11-14 升级 0.2.2-rc.1 即如此，只读诊断确证：四符号 `__fireMuseRunDoorbells/__postMuseDoorbell/museRunDoorbellSeen/muse-run-events` 计数全 0、门铃日志停写）。处置：派只读单核四符号计数；为 0 即按工作区 `research/realtime-channel/RUNBOOK-runevents-doorbell.md` 用同目录幂等脚本 `reapply-runevents-doorbell.py` 重打（锚点失配停手不许硬打）＋重启宿主＋合成铃自验；重启后 poll loop 首轮会补发存量终态铃。每次 DSH 升级后都应主动查一次四符号，别等缺铃才发现。
 
 ## 报告去向（2026-11-13 20:50 LEE 定）
 
