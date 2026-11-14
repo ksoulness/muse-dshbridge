@@ -119,6 +119,7 @@ wechat-first-connect/      ★ 二、第一次连接微信出问题怎么办：�
 dsh-connection/            ★ 三、DSH 的连接：8443 通道、OAuth 建连、token 自续、派发流程
 docs/FOR-NEW-MUSE.md       ★ 给新 Muse 的总入口：阅读顺序、前置清单、铁律、验收标准
 docs/TAKEOVER.md           ★ 接管须知：DSH 侧系统接管 vs DSH Bot 接管、Muse 侧接管注意、归档分工、两边怎么联系
+docs/MULTI-DEPLOY.md       ★ 多机部署两套形态：①我自己的其他电脑（同 tailnet、共用一条收单门铃）②别人的全新一套（自己的 tailnet/ntfy/Muse，与作者零交集）；含门铃数量关系、门铃放公网的硬约束、常见错误
 docs/DSH-CONTROL.md        DSH 线完整方法：双向通道（正向派发 + 终态门铃 + 反向入队取单）、定式、流程、坑
 docs/WECHAT-BRIDGE.md      微信线完整方法：协议、部署、hook、坑
 docs/NOTIFICATION-ROUTING.md
@@ -138,6 +139,8 @@ tools/dsh_watch.py         轮询版 watcher：deadline 制 wait_run 循环，�
 ```
 
 **让一个新的 Muse 学会这两件事**：把本仓库地址给它，并让它先读 `docs/FOR-NEW-MUSE.md`。仓库教方法，但权限不在仓库里——DSH 的 OAuth token 对要所有者在 Windows 侧签发后交付，微信要所有者装插件并扫码一次，这两步天然只能由人完成。
+
+**要装第二台、第三台电脑，或给别人从零装一套**：看 [docs/MULTI-DEPLOY.md](docs/MULTI-DEPLOY.md)。一句话口径——**门铃不按 DSH 数配**：收单铃一个 Muse 一条（N 台 DSH 共用），回报铃一台 DSH 一条（或共用+过滤），8443 车道一台 DSH 一套。别人的整套环境只需要这份仓库当模板，四件套（DSH / Muse / tailscale / ntfy）都得他自己有。
 
 ## 相关项目
 
