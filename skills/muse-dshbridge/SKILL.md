@@ -2,7 +2,7 @@
 name: muse-dshbridge
 description: 当老大说「问 Muse」「让 Muse 查一下」「给 Muse 派活」「让 Muse 做 X」「Muse 帮我看下」这类话术，需要把一件事交给 Muse 处理时使用——本技能是 **muse-dshbridge 双向互派系统在 DSH 侧的入口**（与 GitHub 仓 ksoulness/muse-dshbridge 及 Muse 侧技能 dsh-relay-operation 同源同版；2026-11-13 由 ask-muse v3.0.0 更名而来，协议口径一字未改）。默认走**实时指派通道**（本地队列 + ntfy 门铃，Muse 被门铃实时唤醒、自动接受执行，无需 LEE 逐单确认；硬卡点除外）；入队脚本不可用时兜底走 GitHub 私有收件箱（该路仍要过 LEE 确认门）。本技能固化通道操作：入队、回报 task id、结果回读。触发词：问 Muse、让 Muse 查、给 Muse 派活、派给 Muse、Muse 帮我看、问下 Muse、让 Muse 判断。
 metadata:
-  version: "3.1.3"
+  version: "3.1.4"
   date: "2026-11-14"
   renamed_from: "ask-muse v3.0.0（2026-11-13 更名，协议不变）"
   family: "本机 DSH 专属（DSH⇄Muse 双向互派系统的 DSH 侧入口；DSH→Muse 双通道：实时队列为默认，GitHub 收件箱为兜底）"
@@ -162,7 +162,7 @@ cat outbox/<task-id>.result.md     # 先看 resolution / status，再读正文
 
 - **问题**：Muse 的 `report` 只落 `queue/done/<id>.result.json`，**没有任何东西推给 DSH 侧**。发完单这一轮就结束，回执到了也没人知道——只能等 LEE 问一句「回了吗」。这是 DSH 侧自己的缺口，不是 Muse 的问题。
 - **规矩**：`submit-task.mjs` 入队成功（`doorbell_ok true`）后，**同一轮内必须挂一个后台等待**，落地即报；不许发完就收工。
-- 模板（后台 job；节奏按 §十二 定版自适应：前 30 分钟 60 秒一轮，之后 5 分钟一轮，2 小时后每轮改做存活核对；落地即出结论，job 结束会自动叫醒本会话）：
+- 模板（后台 job；节奏按 §十二 定版自适应：前 30 分钟 60 秒一轮，之后**一直 5 分钟一轮（间隔不拉长）**，2 小时后每轮重点改为核会话存续；落地即出结论，job 结束会自动叫醒本会话）：
 
   ```bash
   id=<单号>; t0=$(date +%s)
@@ -171,29 +171,29 @@ cat outbox/<task-id>.result.md     # 先看 resolution / status，再读正文
     if [ -f "$f" ]; then PYTHONIOENCODING=utf-8 python -c "import json,io,sys;d=json.load(io.open(sys.argv[1],encoding='utf-8'));print(d['reported_at'],d['resolution'],d['status']);print(d['evidence'])" "$f"; exit 0; fi
     el=$(( $(date +%s) - t0 ))
     if [ "$el" -lt 1800 ]; then s=60; else s=300; fi
-    if [ "$el" -ge 7200 ]; then
+    if [ "$el" -ge 7200 ]; then   # 2h+：间隔仍 300s，只是每轮加核一次会话存续
       p="E:/Code/muse/queue/pending/$id.json"; [ -f "$p" ] && st="pending-still-there" || st="pending-moved"
-      echo "ALIVE-PROBE $(date -Is) $st"
+      echo "SESSION-ALIVE $(date -Is) $st"
       curl -s -o /dev/null -w "ALIVE-8443 %{http_code}\n" --max-time 8 "https://win.<tailnet>.ts.net:8443/health"
     fi
     sleep "$s"
   done
   ```
 
-- 超过 2 小时仍无终态：不再长挂 job，改 `schedule_create` 每 15 分钟一次存活核对（判定口径见 §十二），每轮核 `pending/<id>.json` 在不在、`status` 的 `last_pickup_at`/`last_report_at` 有没有推进、8443 探活通不通；到 deadline（默认 4 小时）转 pending 自检 + 报老大「超时仍在运行 / 已失联」。
+- **超过 2 小时仍无终态：间隔不拉长，仍每 5 分钟一轮**，只是每轮重点从「盯终态」改为核一次**会话是否还存续**（还在运行 / 有进展 / 未被归档或消失，判定口径见 §十二）；**一直跟到终态、或会话确认已不存续为止，没有放弃线**（不设 3 小时/4 小时截断，也不改成 15 分钟一次的提醒任务）。不催单、不重复提交同一单这条照旧。
 - 这条不改通道、不加常驻程序或计划任务，纯会话内等待。
 
 ## 十二、跟进节奏（LEE 2026-11-14 定版，两侧同守）
 
-- **定版规矩（LEE 原话大意）**：两边的扫描都太密了。**前 30 分钟 60 秒一轮；超过 30 分钟 5 分钟一轮；超过两三个小时不再紧盯终态，每轮着重核一次任务还在不在运行（存活核对）。** Muse 侧 watcher 脚本与技能已按此落地（commit `1bf0d92`），本节是 DSH 侧同一口径。
+- **定版规矩（LEE 原话大意）**：两边的扫描都太密了。**前 30 分钟 60 秒一轮；超过 30 分钟 5 分钟一轮；超过两三个小时仍是 5 分钟一轮（间隔不拉长），变的只是重点——不再紧盯终态，改为每轮着重核一次「会话是否还存续」（还在运行、有进展、未被归档或消失）。** 一直跟到终态或会话确认不存续为止，**没有放弃线**。（2026-11-14 14:15 LEE 亲口澄清修正：撤掉「2 小时后改 15 分钟一次」与「3/4 小时放弃线」两处偏差；Muse 侧已同步为 commit `779adfe`，两个 watcher 本来 300 秒封顶、节奏已对齐。）
 - **DSH 侧落地清单（逐项，2026-11-14）**：
   1. **门铃 poll loop（运行真身 bundle `dsh-relay-harness.mjs`）**：`setInterval(function(){...},5000)` → `...,60000)`。改法固化在 `research/realtime-channel/set-poll-interval-60s.py`（先写 `.bak-20261114-*-poll60s` 备份 → 校验锚点唯一 → 改 → `node --check` → 重启宿主加载）；重打脚本 `reapply-runevents-doorbell.py` 的注入串同步改成 `60000`，以后重打不会退回 5 秒。**60 秒间隔下终态铃时延 ≤ 约 60 秒属预期，不是故障。**
-  2. **发单后等回执（§十一 模板）**：原 `sleep 10 × 90`（10 秒一轮、封顶 15 分钟）→ 改成 §十一 里的自适应循环（60s → 300s → 2 小时后改存活核对）。
-  3. **DSH 侧其余跟进类轮询：无。** 明示排除项：`research/realtime-channel/` 的 `longhold.mjs` / `sse.mjs` / `sse-client.mjs` / `ws-test.mjs` 是一次性探针（开一次、验完即弃），不是跟进轮询，节奏规矩不适用；`tools/dsh_watch.py`、`tools/watch_run_event.py` 是 **Muse 侧** watcher（Muse 已改成 60s→300s＋2h 存活核对），DSH 侧不重复改；本机当前无定时跟进任务（`fleet_schedule_list` 为空）。
-- **2 小时后「存活核对」的判定口径**（不再因 still running 反复重拉、不催单）：
+  2. **发单后等回执（§十一 模板）**：原 `sleep 10 × 90`（10 秒一轮、封顶 15 分钟）→ 改成 §十一 里的自适应循环：**60 秒（前 30 分钟）→ 300 秒（30 分钟后一直如此，间隔不再变化）；2 小时后每轮重点转为会话存续核对，节奏仍是 300 秒**。
+  3. **DSH 侧其余跟进类轮询：无。** 明示排除项：`research/realtime-channel/` 的 `longhold.mjs` / `sse.mjs` / `sse-client.mjs` / `ws-test.mjs` 是一次性探针（开一次、验完即弃），不是跟进轮询，节奏规矩不适用；`tools/dsh_watch.py`、`tools/watch_run_event.py` 是 **Muse 侧** watcher（Muse 侧 60s→300s、300 秒封顶，已对齐 `779adfe`），DSH 侧不重复改；本机当前无定时跟进任务（`fleet_schedule_list` 为空）。
+- **2 小时后「会话存续核对」的判定口径**（间隔仍 5 分钟；不再因 still running 反复重拉、不催单、不重提）：
   - `E:/Code/muse/queue/pending/<id>.json` 还在 → 单仍在队列、Muse 未 pickup；已不在且 `done/` 无 result → 已被 pickup 正在做，继续看 `done/`；
-  - MCP `status` 的 `last_pickup_at` / `last_report_at` 有没有推进（推进即在运行）；
-  - 8443 探活 `https://win.<tailnet>.ts.net:8443/health` 通不通。
-  - 三项都显示「还在运行」→ 继续每 5 分钟一轮存活核对，不缩短间隔、不重复提交同一单；任一项失联 → 按 §六 报原文并切兜底判定。
+  - MCP `status` 的 `last_pickup_at` / `last_report_at`（或无该字段时的等价进展时间：`done/` 目录 mtime、run 的 `updatedAt`）有没有推进 → 推进即「还在运行且有进展」；
+  - 会话本身还在：没有被归档、没有消失（本会话/Muse 侧会话 id 仍可读，run 记录仍在 `listRuns` 里）。
+  - 三项都指向「会话仍存续」→ 继续每 5 分钟一轮核，**不缩短间隔、不拉长间隔、不设放弃线**，直到终态或确认不存续；任一项明确指向消失/失联 → 按 §六 报原文并切兜底判定。
 - **与 §十一 的分工**：§十一 管「发完单必须挂等待」，本节管「等待按什么节奏扫」。
 
